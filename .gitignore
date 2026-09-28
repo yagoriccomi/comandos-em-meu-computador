@@ -1,0 +1,27 @@
+# Dependências e builds
+node_modules/
+dist/
+*.blob
+.sea-build/
+
+# Segredos e configuração local — NUNCA versionar
+.env
+.env.*
+!.env.example
+secrets.json
+!secrets.example.json
+actions.json
+config.json
+agent/config/actions.json
+
+# Logs locais (podem conter saída de comandos)
+logs/
+*.log
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+.ask/
