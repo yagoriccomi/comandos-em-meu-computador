@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const MAX_SYNC_TIMEOUT_MS = 3500; // precisa responder antes da Alexa desistir (~5 s)
+const MAX_SYNC_TIMEOUT_MS = 3500; // precisa responder antes de a skill desistir do ack (4,5 s)
 const DEFAULT_TIMEOUT_MS = 3000;
 const DEFAULT_SUCCESS_EXIT_CODES = Object.freeze([0]);
 const PLACEHOLDER = /^\{([a-z][a-z0-9_]*)(?:\*(\d{1,5}))?\}$/;

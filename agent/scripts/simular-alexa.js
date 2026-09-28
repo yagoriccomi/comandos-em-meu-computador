@@ -16,7 +16,7 @@ const SECRETS_ARG = '--segredos=';
 const SPOKEN_RESULT = Object.freeze({
     [DeliveryResult.DONE]: 'Feito.',
     [DeliveryResult.FAILED]: 'Não consegui executar essa ação. (o agente recusou ou a ação falhou — veja o log local)',
-    [DeliveryResult.NO_ANSWER]: 'Não consegui executar essa ação. (o agente não respondeu em 5 s)',
+    [DeliveryResult.NO_ANSWER]: 'Não consegui executar essa ação. (o agente não respondeu a tempo)',
 });
 
 function parseArgs(argv) {

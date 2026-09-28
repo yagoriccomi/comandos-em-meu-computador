@@ -5,7 +5,8 @@
  */
 const protocol = require('../protocol/message');
 
-const ACK_TIMEOUT_MS = 5000;
+// Orçamento total da Alexa ≈ 8 s: conexão (≤ 2,5 s) + espera do ack (≤ 4,5 s) + margem.
+const ACK_TIMEOUT_MS = 4500;
 
 const DeliveryResult = Object.freeze({
     DONE: 'done',

@@ -2,7 +2,7 @@
 /* Transporte MQTT sobre TLS para uma única invocação da Lambda (conecta, usa, fecha). */
 const crypto = require('crypto');
 
-const CONNECT_TIMEOUT_MS = 3000;
+const CONNECT_TIMEOUT_MS = 2500;
 const QOS_AT_LEAST_ONCE = 1;
 const CLIENT_ID_PREFIX = 'alexa-';
 
