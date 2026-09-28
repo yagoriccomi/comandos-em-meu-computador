@@ -1,16 +1,23 @@
 {
-  "name": "hello-world",
-  "version": "1.2.0",
-  "description": "alexa utility for quickly building skills",
+  "name": "o-monstro-skill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Skill Alexa que envia ações predefinidas e assinadas para o agente no PC",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test \"test/**/*.test.js\"",
+    "catalog:sync": "node scripts/sync-catalog.js",
+    "catalog:check": "node scripts/sync-catalog.js --check",
+    "hash-user-id": "node scripts/hash-user-id.js"
   },
-  "author": "Amazon Alexa",
-  "license": "Apache License",
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "GPL-3.0-only",
   "dependencies": {
-    "ask-sdk-core": "^2.7.0",
-    "ask-sdk-model": "^1.19.0",
-    "aws-sdk": "^2.326.0"
+    "@aws-sdk/client-s3": "^3.600.0",
+    "ask-sdk-core": "^2.14.0",
+    "ask-sdk-model": "^1.86.0",
+    "mqtt": "^5.10.0"
   }
 }

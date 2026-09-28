@@ -1,0 +1,24 @@
+{
+  "name": "o-monstro-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agente Windows que executa ações predefinidas pedidas pela skill O Monstro",
+  "main": "src/main.js",
+  "bin": "src/main.js",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "build:exe": "node build/build-exe.js",
+    "simular": "node scripts/simular-alexa.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "mqtt": "^5.10.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "postject": "^1.0.0-alpha.6"
+  }
+}

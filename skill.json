@@ -30,18 +30,18 @@
       "isAvailableWorldwide": true,
       "locales": {
         "pt-BR": {
-          "description": "Sample Full Description",
+          "description": "Uso pessoal. Diga \"Alexa, pede para o monstro abrir a Netflix\" ou \"desligar o computador em 30 minutos\" e o agente instalado no seu PC executa somente ações cadastradas por você, com confirmação por voz para ações sensíveis.",
           "examplePhrases": [
-            "Alexa abra olá mundo",
-            "olá",
-            "ajuda"
+            "Alexa, pede para o monstro abrir a Netflix",
+            "Alexa, pede para o monstro desligar o computador em 30 minutos",
+            "Alexa, pede para o monstro rodar o backup"
           ],
           "keywords": [],
-          "name": "Comandos em Meu Computador",
-          "summary": "Sample Short Description"
+          "name": "O Monstro",
+          "summary": "Executa ações predefinidas no seu PC Windows por voz."
         }
       },
-      "testingInstructions": "Sample Testing Instructions."
+      "testingInstructions": "Requer o agente O Monstro instalado em um PC Windows e o arquivo config/secrets.json no bucket S3 da skill."
     }
   }
 }

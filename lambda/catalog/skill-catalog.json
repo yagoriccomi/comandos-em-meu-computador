@@ -1,0 +1,66 @@
+{
+    "version": 1,
+    "actions": [
+        {
+            "id": "abrir_netflix",
+            "description": "Abre a Netflix no navegador padrão",
+            "spokenName": "a Netflix",
+            "slotType": "TIPO_APLICATIVO",
+            "synonyms": ["netflix", "a netflix", "o netflix"],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "bloquear_tela",
+            "description": "Bloqueia a tela do Windows",
+            "spokenName": "bloquear a tela",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": ["bloquear a tela", "bloquear o computador", "bloquear o pc", "trancar o computador", "bloqueio de tela"],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "desligar_em_minutos",
+            "description": "Agenda o desligamento do PC em N minutos",
+            "spokenName": "desligar o computador",
+            "intent": "DesligarEmMinutosIntent",
+            "requiresConfirmation": true,
+            "requiresDesktop": false,
+            "params": [
+                { "name": "minutos", "slot": "minutos", "type": "integer", "min": 1, "max": 240 }
+            ]
+        },
+        {
+            "id": "cancelar_desligamento",
+            "description": "Cancela um desligamento ou reinício agendado",
+            "spokenName": "cancelar o desligamento",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": ["cancelar o desligamento", "cancelar desligamento", "não desligar", "cancelar o reinício"],
+            "requiresConfirmation": false,
+            "requiresDesktop": false,
+            "params": []
+        },
+        {
+            "id": "reiniciar_pc",
+            "description": "Reinicia o PC em 60 segundos",
+            "spokenName": "reiniciar o computador",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": ["reiniciar o computador", "reiniciar o pc", "reiniciar", "reinício"],
+            "requiresConfirmation": true,
+            "requiresDesktop": false,
+            "params": []
+        },
+        {
+            "id": "backup_documentos",
+            "description": "Roda a rotina de backup definida localmente",
+            "spokenName": "o backup",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": ["backup", "o backup", "backup dos documentos", "fazer backup", "cópia de segurança"],
+            "requiresConfirmation": true,
+            "requiresDesktop": false,
+            "params": []
+        }
+    ]
+}
