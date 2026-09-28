@@ -24,14 +24,6 @@
           "samples": []
         },
         {
-          "name": "AMAZON.YesIntent",
-          "samples": []
-        },
-        {
-          "name": "AMAZON.NoIntent",
-          "samples": []
-        },
-        {
           "name": "AbrirAplicativoIntent",
           "slots": [
             {
