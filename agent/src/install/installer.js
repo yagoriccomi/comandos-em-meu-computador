@@ -105,8 +105,27 @@ async function askAnswers(prompt) {
     return { brokerUrl, pcUser: pc.username, pcPassword: pc.password, alexaUser: alexa.username, alexaPassword: alexa.password, skillId };
 }
 
+function getOwnerSid(directory) {
+    const command = `(Get-Acl -LiteralPath ${quotePowerShell(directory)}).GetOwner([System.Security.Principal.SecurityIdentifier]).Value`;
+    return childProcess.execFileSync(POWERSHELL_EXE, ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8', windowsHide: true }).trim();
+}
+
+/**
+ * Em %ProgramData% qualquer conta pode criar pastas. Se outra conta criou OMonstro antes da instalação,
+ * ela seria dona da pasta e poderia plantar um actions.json malicioso: nesse caso a instalação para.
+ */
+function assertDataDirectoryIsTrusted(userSid) {
+    if (!fs.existsSync(paths.DATA_DIR)) return;
+    const ownerSid = getOwnerSid(paths.DATA_DIR);
+    if (![SID_ADMINISTRATORS.slice(1), SID_SYSTEM.slice(1), userSid].includes(ownerSid)) {
+        throw new Error(`A pasta ${paths.DATA_DIR} foi criada por outra conta do Windows. Por segurança, apague-a e rode o instalador de novo.`);
+    }
+}
+
 function restrictDataDirectory(userSid) {
-    childProcess.execFileSync(path.join(SYSTEM32, 'icacls.exe'), [
+    const icacls = path.join(SYSTEM32, 'icacls.exe');
+    childProcess.execFileSync(icacls, [paths.DATA_DIR, '/setowner', SID_ADMINISTRATORS, '/T', '/C', '/Q'], { stdio: 'ignore', windowsHide: true });
+    childProcess.execFileSync(icacls, [
         paths.DATA_DIR, '/inheritance:r',
         '/grant:r', `${SID_SYSTEM}:(OI)(CI)F`,
         '/grant:r', `${SID_ADMINISTRATORS}:(OI)(CI)F`,
@@ -157,6 +176,7 @@ async function runInstall(argv) {
         tasks.stopTask(tasks.CORE_TASK);
         tasks.stopTask(tasks.DESKTOP_TASK);
 
+        assertDataDirectoryIsTrusted(userSid);
         fs.mkdirSync(paths.LOG_DIR, { recursive: true });
         restrictDataDirectory(userSid);
 
