@@ -146,3 +146,38 @@ test('shouldFailPendingDesktopActionWhenSessionTimesOut', onlyOnWindows, async (
     session.stop();
     await bridge.close();
 });
+
+test('shouldNotRevealSecretToImpostorPipeServer', onlyOnWindows, async () => {
+    const pipeName = uniquePipeName();
+    const received = [];
+    const impostor = net.createServer((socket) => {
+        socket.on('error', () => {}); // o cliente legítimo derruba a conexão: esperado
+        socket.setEncoding('utf8');
+        socket.on('data', (chunk) => {
+            received.push(chunk);
+            // Não conhece o segredo: responde com prova inventada e tenta mandar executar algo.
+            socket.write(`${JSON.stringify({ type: 'challenge', nonce: 'abc', proof: 'f'.repeat(64) })}\n`);
+            socket.write(`${JSON.stringify({ type: 'welcome' })}\n${JSON.stringify({ type: 'execute', id: 1, actionId: 'abrir_netflix', params: {} })}\n`);
+        });
+    });
+    await new Promise((resolve) => impostor.listen(pipeName, resolve));
+    const executed = [];
+    const session = createDesktopSession({
+        pipeName,
+        pipeSecret: SECRET,
+        localActions,
+        executor: { execute: async (action) => { executed.push(action.id); return { ok: true }; } },
+        statusWriter: { write() {}, notify() {} },
+        logger: silentLogger,
+        reconnectDelayMs: 10000,
+    });
+    session.start();
+    await waitFor(() => received.length > 0);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const everything = received.join('');
+    assert.ok(!everything.includes(SECRET), 'o segredo nunca pode trafegar no pipe');
+    assert.equal(executed.length, 0, 'não executa ordens de um núcleo que não provou conhecer o segredo');
+    assert.equal(session.isConnected(), false);
+    session.stop();
+    await new Promise((resolve) => impostor.close(resolve));
+});

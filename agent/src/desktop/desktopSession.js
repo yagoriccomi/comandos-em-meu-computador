@@ -5,7 +5,7 @@
  */
 const fs = require('fs');
 const net = require('net');
-const { PipeMessage, attachLineChannel } = require('./pipeChannel');
+const { PipeMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel } = require('./pipeChannel');
 
 const RECONNECT_DELAY_MS = 5000;
 const HEARTBEAT_MS = 5000;
@@ -58,6 +58,8 @@ function stateFromCoreStatus(status) {
  */
 function createDesktopSession({ pipeName, pipeSecret, localActions, executor, statusWriter, logger, connect = net.connect, reconnectDelayMs = RECONNECT_DELAY_MS }) {
     let channel;
+    let socket;
+    let clientNonce;
     let welcomed = false;
     let state = TrayState.CORE_DOWN;
     let stopped = false;
@@ -80,7 +82,15 @@ function createDesktopSession({ pipeName, pipeSecret, localActions, executor, st
     }
 
     function onMessage(message) {
-        if (message.type === PipeMessage.WELCOME) {
+        if (message.type === PipeMessage.CHALLENGE && !welcomed) {
+            // Só responde se o outro lado provou conhecer o segredo: evita falar com um pipe impostor.
+            if (!proofMatches(pipeSecret, ProofRole.SERVER, clientNonce, message.proof)) {
+                logger.warn({ event: 'core_auth_failed' });
+                socket.destroy();
+                return;
+            }
+            channel.send({ type: PipeMessage.AUTH, proof: computeProof(pipeSecret, ProofRole.CLIENT, message.nonce) });
+        } else if (message.type === PipeMessage.WELCOME) {
             welcomed = true;
             logger.info({ event: 'connected_to_core' });
         } else if (message.type === PipeMessage.STATUS && welcomed) {
@@ -92,10 +102,11 @@ function createDesktopSession({ pipeName, pipeSecret, localActions, executor, st
 
     function connectToCore() {
         if (stopped) return;
-        const socket = connect(pipeName);
+        socket = connect(pipeName);
         socket.on('connect', () => {
+            clientNonce = createNonce();
             channel = attachLineChannel(socket, onMessage);
-            channel.send({ type: PipeMessage.HELLO, token: pipeSecret });
+            channel.send({ type: PipeMessage.HELLO, nonce: clientNonce });
         });
         socket.on('error', () => {});
         socket.on('close', () => {

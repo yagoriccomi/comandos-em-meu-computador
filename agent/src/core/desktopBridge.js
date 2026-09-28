@@ -5,7 +5,7 @@
  */
 const net = require('net');
 const { MAX_SYNC_TIMEOUT_MS } = require('../config/localActions');
-const { HANDSHAKE_TIMEOUT_MS, PipeMessage, tokensMatch, attachLineChannel } = require('../desktop/pipeChannel');
+const { HANDSHAKE_TIMEOUT_MS, PipeMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel } = require('../desktop/pipeChannel');
 
 /**
  * @param {object} deps
@@ -41,13 +41,22 @@ function createDesktopBridge({ pipeName, pipeSecret, logger, getStatus, onPauseC
 
     function onConnection(socket) {
         let authenticated = false;
+        let serverNonce;
         const handshakeTimer = setTimeout(() => socket.destroy(), HANDSHAKE_TIMEOUT_MS);
+        const rejectSession = () => {
+            logger.warn({ event: 'desktop_auth_failed' });
+            socket.destroy();
+        };
         const channel = attachLineChannel(socket, (message) => {
+            if (!authenticated && !serverNonce) {
+                if (message.type !== PipeMessage.HELLO || typeof message.nonce !== 'string') return rejectSession();
+                serverNonce = createNonce();
+                channel.send({ type: PipeMessage.CHALLENGE, nonce: serverNonce, proof: computeProof(pipeSecret, ProofRole.SERVER, message.nonce) });
+                return undefined;
+            }
             if (!authenticated) {
-                if (message.type !== PipeMessage.HELLO || !tokensMatch(pipeSecret, message.token)) {
-                    logger.warn({ event: 'desktop_auth_failed' });
-                    socket.destroy();
-                    return;
+                if (message.type !== PipeMessage.AUTH || !proofMatches(pipeSecret, ProofRole.CLIENT, serverNonce, message.proof)) {
+                    return rejectSession();
                 }
                 authenticated = true;
                 clearTimeout(handshakeTimer);
@@ -56,9 +65,9 @@ function createDesktopBridge({ pipeName, pipeSecret, logger, getStatus, onPauseC
                 channel.send({ type: PipeMessage.WELCOME });
                 channel.send({ type: PipeMessage.STATUS, ...getStatus() });
                 logger.info({ event: 'desktop_session_connected' });
-                return;
+                return undefined;
             }
-            handleSessionMessage(message);
+            return handleSessionMessage(message);
         });
         socket.on('close', () => {
             clearTimeout(handshakeTimer);

@@ -1,15 +1,21 @@
 'use strict';
 /*
  * Canal local núcleo ↔ sessão de desktop sobre named pipe: JSON por linha, com tamanho máximo
- * e autenticação por segredo compartilhado (config.json, legível só pelo dono e administradores).
+ * e autenticação MÚTUA por desafio-resposta com segredo compartilhado (config.json). O segredo nunca
+ * trafega: cada lado prova que o conhece assinando o nonce do outro. Isso impede que um processo que
+ * crie o pipe antes do núcleo (pipe squatting) capture o segredo ou se passe pelo núcleo.
  */
 const crypto = require('crypto');
 
 const MAX_LINE_BYTES = 4096;
 const HANDSHAKE_TIMEOUT_MS = 2000;
+const NONCE_BYTES = 32;
+const ProofRole = Object.freeze({ SERVER: 'server', CLIENT: 'client' });
 
 const PipeMessage = Object.freeze({
     HELLO: 'hello',
+    CHALLENGE: 'challenge',
+    AUTH: 'auth',
     WELCOME: 'welcome',
     STATUS: 'status',
     EXECUTE: 'execute',
@@ -19,11 +25,19 @@ const PipeMessage = Object.freeze({
     SHUTDOWN: 'shutdown',
 });
 
-function tokensMatch(expected, received) {
-    if (typeof received !== 'string') return false;
-    const a = crypto.createHash('sha256').update(expected).digest();
-    const b = crypto.createHash('sha256').update(received).digest();
-    return crypto.timingSafeEqual(a, b);
+function createNonce() {
+    return crypto.randomBytes(NONCE_BYTES).toString('hex');
+}
+
+function computeProof(secret, role, nonce) {
+    return crypto.createHmac('sha256', secret).update(`${role}:${nonce}`).digest('hex');
+}
+
+function proofMatches(secret, role, nonce, receivedProof) {
+    if (typeof receivedProof !== 'string' || typeof nonce !== 'string') return false;
+    const expected = Buffer.from(computeProof(secret, role, nonce));
+    const received = Buffer.from(receivedProof);
+    return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
 /** Envolve um socket: onMessage(objeto) por linha; fecha a conexão em linha grande ou JSON inválido. */
@@ -59,4 +73,4 @@ function attachLineChannel(socket, onMessage) {
     };
 }
 
-module.exports = { MAX_LINE_BYTES, HANDSHAKE_TIMEOUT_MS, PipeMessage, tokensMatch, attachLineChannel };
+module.exports = { MAX_LINE_BYTES, HANDSHAKE_TIMEOUT_MS, PipeMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel };
