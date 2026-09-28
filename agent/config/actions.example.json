@@ -1,0 +1,42 @@
+{
+    "actions": [
+        {
+            "id": "abrir_netflix",
+            "executable": "C:\\Windows\\explorer.exe",
+            "args": ["https://www.netflix.com"],
+            "successExitCodes": [0, 1],
+            "enabled": true
+        },
+        {
+            "id": "bloquear_tela",
+            "executable": "C:\\Windows\\System32\\rundll32.exe",
+            "args": ["user32.dll,LockWorkStation"],
+            "enabled": true
+        },
+        {
+            "id": "desligar_em_minutos",
+            "executable": "C:\\Windows\\System32\\shutdown.exe",
+            "args": ["/s", "/t", "{minutos*60}"],
+            "enabled": true
+        },
+        {
+            "id": "cancelar_desligamento",
+            "executable": "C:\\Windows\\System32\\shutdown.exe",
+            "args": ["/a"],
+            "enabled": true
+        },
+        {
+            "id": "reiniciar_pc",
+            "executable": "C:\\Windows\\System32\\shutdown.exe",
+            "args": ["/r", "/t", "60"],
+            "enabled": true
+        },
+        {
+            "id": "backup_documentos",
+            "executable": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\Caminho\\Para\\seu-backup.ps1"],
+            "waitForExit": false,
+            "enabled": false
+        }
+    ]
+}

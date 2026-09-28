@@ -10,7 +10,7 @@ lambda/        Skill Alexa-hosted (Node, CommonJS, compatível com Node 18)
   handlers/    Intents (canHandle/handle do ASK SDK) — sem regra de negócio
   domain/      catálogo público, slot → actionId, validação de params
   messaging/   envia cmd e espera ack pelo broker MQTT
-  protocol/    mensagens assinadas (CÓPIA IDÊNTICA de agent/src/protocol — teste garante)
+  protocol/    mensagens assinadas (o agente importa daqui via agent/src/shared.js; esbuild embute no .exe)
   config/      segredos lidos de config/secrets.json no bucket S3 da skill
   catalog/     skill-catalog.json — FONTE DA VERDADE pública das ações
 interactionModels/custom/pt-BR.json   slot types GERADOS por `npm run catalog:sync` (em lambda/)
