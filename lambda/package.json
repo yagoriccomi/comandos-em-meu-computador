@@ -7,7 +7,8 @@
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "catalog:sync": "node scripts/sync-catalog.js",
-    "catalog:check": "node scripts/sync-catalog.js --check"
+    "catalog:check": "node scripts/sync-catalog.js --check",
+    "hash-user-id": "node scripts/hash-user-id.js"
   },
   "engines": {
     "node": ">=18"
