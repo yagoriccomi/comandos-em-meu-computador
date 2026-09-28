@@ -1,6 +1,7 @@
 {
   "interactionModel": {
     "languageModel": {
+      "invocationName": "o monstro",
       "intents": [
         {
           "name": "AMAZON.CancelIntent",
@@ -15,25 +16,144 @@
           "samples": []
         },
         {
-          "slots": [],
-          "name": "HelloWorldIntent",
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": []
+        },
+        {
+          "name": "AbrirAplicativoIntent",
+          "slots": [
+            {
+              "name": "aplicativo",
+              "type": "TIPO_APLICATIVO"
+            }
+          ],
           "samples": [
-            "olá",
-            "como vai você",
-            "diga oi mundo",
-            "diga oi",
-            "oi",
-            "diga olá mundo",
-            "diga olá"
+            "abrir {aplicativo}",
+            "abre {aplicativo}",
+            "abra {aplicativo}",
+            "iniciar {aplicativo}",
+            "colocar {aplicativo}",
+            "liga {aplicativo}"
           ]
         },
         {
-          "name": "AMAZON.NavigateHomeIntent",
-          "samples": []
+          "name": "ExecutarRotinaIntent",
+          "slots": [
+            {
+              "name": "rotina",
+              "type": "TIPO_ROTINA"
+            }
+          ],
+          "samples": [
+            "executar a rotina {rotina}",
+            "executar rotina {rotina}",
+            "executar {rotina}",
+            "rodar a rotina {rotina}",
+            "rodar {rotina}",
+            "fazer {rotina}",
+            "{rotina}"
+          ]
+        },
+        {
+          "name": "DesligarEmMinutosIntent",
+          "slots": [
+            {
+              "name": "minutos",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "desligar o computador em {minutos} minutos",
+            "desligar o pc em {minutos} minutos",
+            "desligar em {minutos} minutos",
+            "desliga em {minutos} minutos",
+            "desligar daqui a {minutos} minutos",
+            "desligar o computador daqui a {minutos} minutos",
+            "desligar o computador",
+            "desligar o pc"
+          ]
         }
       ],
-      "types": [],
-      "invocationName": "change me"
+      "types": [
+        {
+          "name": "TIPO_APLICATIVO",
+          "values": [
+            {
+              "id": "abrir_netflix",
+              "name": {
+                "value": "netflix",
+                "synonyms": [
+                  "a netflix",
+                  "o netflix"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TIPO_ROTINA",
+          "values": [
+            {
+              "id": "bloquear_tela",
+              "name": {
+                "value": "bloquear a tela",
+                "synonyms": [
+                  "bloquear o computador",
+                  "bloquear o pc",
+                  "trancar o computador",
+                  "bloqueio de tela"
+                ]
+              }
+            },
+            {
+              "id": "cancelar_desligamento",
+              "name": {
+                "value": "cancelar o desligamento",
+                "synonyms": [
+                  "cancelar desligamento",
+                  "não desligar",
+                  "cancelar o reinício"
+                ]
+              }
+            },
+            {
+              "id": "reiniciar_pc",
+              "name": {
+                "value": "reiniciar o computador",
+                "synonyms": [
+                  "reiniciar o pc",
+                  "reiniciar",
+                  "reinício"
+                ]
+              }
+            },
+            {
+              "id": "backup_documentos",
+              "name": {
+                "value": "backup",
+                "synonyms": [
+                  "o backup",
+                  "backup dos documentos",
+                  "fazer backup",
+                  "cópia de segurança"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   }
 }
