@@ -92,7 +92,7 @@ const SessionEndedRequestHandler = {
         return Alexa.getRequestType(handlerInput.requestEnvelope) === 'SessionEndedRequest';
     },
     handle(handlerInput) {
-        console.log(`~~~~ Session ended: ${JSON.stringify(handlerInput.requestEnvelope)}`);
+        // Não logar o envelope: contém userId, deviceId e apiAccessToken (LGPD).
         // Any cleanup logic goes here.
         return handlerInput.responseBuilder.getResponse(); // notice we send an empty response
     }
@@ -127,7 +127,7 @@ const ErrorHandler = {
     },
     handle(handlerInput, error) {
         const speakOutput = 'Sorry, I had trouble doing what you asked. Please try again.';
-        console.log(`~~~~ Error handled: ${JSON.stringify(error)}`);
+        console.log(JSON.stringify({ level: 'error', event: 'unhandled_error', errorName: error && error.name }));
 
         return handlerInput.responseBuilder
             .speak(speakOutput)
