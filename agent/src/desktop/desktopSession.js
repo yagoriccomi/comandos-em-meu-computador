@@ -1,11 +1,10 @@
 'use strict';
 /*
- * Lado da SESSÃO DO USUÁRIO do named pipe (inicia no logon). Executa as ações que precisam de tela,
+ * Lado da SESSÃO DO USUÁRIO do canal local (inicia no logon). Executa as ações que precisam de tela,
  * publica o estado para o ícone da bandeja e repassa ao núcleo os comandos do menu.
  */
 const fs = require('fs');
-const net = require('net');
-const { PipeMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel } = require('./pipeChannel');
+const { ChannelMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel, connectToLoopback } = require('./localChannel');
 
 const RECONNECT_DELAY_MS = 5000;
 const HEARTBEAT_MS = 5000;
@@ -49,21 +48,23 @@ function stateFromCoreStatus(status) {
 
 /**
  * @param {object} deps
- * @param {string} deps.pipeName
- * @param {string} deps.pipeSecret
+ * @param {string} deps.endpointFile   arquivo onde o núcleo publica a porta local
+ * @param {string} deps.pipeSecret     segredo do canal local (chave já gravada no config.json)
  * @param {{ get: Function }} deps.localActions
  * @param {{ execute: Function }} deps.executor
  * @param {{ write: Function, notify: Function }} deps.statusWriter
  * @param {object} deps.logger
  */
-function createDesktopSession({ pipeName, pipeSecret, localActions, executor, statusWriter, logger, connect = net.connect, reconnectDelayMs = RECONNECT_DELAY_MS }) {
+function createDesktopSession({ endpointFile, pipeSecret, localActions, executor, statusWriter, logger, connect = connectToLoopback, reconnectDelayMs = RECONNECT_DELAY_MS }) {
     let channel;
     let socket;
     let clientNonce;
+    let coreProvedSecret = false;
     let welcomed = false;
     let state = TrayState.CORE_DOWN;
     let stopped = false;
     let heartbeat;
+    let reconnectTimer;
 
     function setState(next) {
         state = next;
@@ -78,48 +79,62 @@ function createDesktopSession({ pipeName, pipeSecret, localActions, executor, st
         } else {
             logger.warn({ event: 'desktop_action_refused', actionId: message.actionId });
         }
-        if (channel) channel.send({ type: PipeMessage.RESULT, id: message.id, ok });
+        if (channel) channel.send({ type: ChannelMessage.RESULT, id: message.id, ok });
     }
 
     function onMessage(message) {
-        if (message.type === PipeMessage.CHALLENGE && !welcomed) {
-            // Só responde se o outro lado provou conhecer o segredo: evita falar com um pipe impostor.
+        if (message.type === ChannelMessage.CHALLENGE && !coreProvedSecret) {
+            // Só responde se o outro lado provou conhecer o segredo: evita falar com um núcleo impostor.
             if (!proofMatches(pipeSecret, ProofRole.SERVER, clientNonce, message.proof)) {
                 logger.warn({ event: 'core_auth_failed' });
                 socket.destroy();
                 return;
             }
-            channel.send({ type: PipeMessage.AUTH, proof: computeProof(pipeSecret, ProofRole.CLIENT, message.nonce) });
-        } else if (message.type === PipeMessage.WELCOME) {
+            coreProvedSecret = true;
+            channel.send({ type: ChannelMessage.AUTH, proof: computeProof(pipeSecret, ProofRole.CLIENT, message.nonce) });
+        } else if (message.type === ChannelMessage.WELCOME && coreProvedSecret) {
+            // "welcome" só vale depois de o núcleo ter provado o segredo no desafio.
             welcomed = true;
             logger.info({ event: 'connected_to_core' });
-        } else if (message.type === PipeMessage.STATUS && welcomed) {
+        } else if (message.type === ChannelMessage.STATUS && welcomed) {
             setState(stateFromCoreStatus(message));
-        } else if (message.type === PipeMessage.EXECUTE && welcomed) {
+        } else if (message.type === ChannelMessage.EXECUTE && welcomed) {
             runDesktopAction(message).catch((error) => logger.error({ event: 'desktop_action_crashed', errorName: error.name }));
         }
     }
 
+    function scheduleReconnect() {
+        setState(TrayState.CORE_DOWN);
+        reconnectTimer = setTimeout(connectToCore, reconnectDelayMs);
+    }
+
     function connectToCore() {
         if (stopped) return;
-        socket = connect(pipeName);
+        try {
+            socket = connect(endpointFile);
+        } catch (error) {
+            // Núcleo ainda não publicou a porta (não iniciou ou parou): tenta de novo depois.
+            scheduleReconnect();
+            return;
+        }
         socket.on('connect', () => {
             clientNonce = createNonce();
+            coreProvedSecret = false;
             channel = attachLineChannel(socket, onMessage);
-            channel.send({ type: PipeMessage.HELLO, nonce: clientNonce });
+            channel.send({ type: ChannelMessage.HELLO, nonce: clientNonce });
         });
         socket.on('error', () => {});
         socket.on('close', () => {
             const wasConnected = welcomed;
             channel = undefined;
             welcomed = false;
+            coreProvedSecret = false;
             if (stopped) return;
             if (wasConnected) {
                 logger.warn({ event: 'core_connection_lost' });
                 statusWriter.notify(Notice.CORE_STOPPED, TrayState.CORE_DOWN);
             }
-            setState(TrayState.CORE_DOWN);
-            setTimeout(connectToCore, reconnectDelayMs);
+            scheduleReconnect();
         });
     }
 
@@ -143,12 +158,14 @@ function createDesktopSession({ pipeName, pipeSecret, localActions, executor, st
         stop() {
             stopped = true;
             clearInterval(heartbeat);
+            clearTimeout(reconnectTimer);
+            if (socket) socket.destroy();
         },
         getState: () => state,
         isConnected: () => welcomed,
-        pause: () => sendToCore(PipeMessage.PAUSE),
-        resume: () => sendToCore(PipeMessage.RESUME),
-        shutdownCore: () => sendToCore(PipeMessage.SHUTDOWN),
+        pause: () => sendToCore(ChannelMessage.PAUSE),
+        resume: () => sendToCore(ChannelMessage.RESUME),
+        shutdownCore: () => sendToCore(ChannelMessage.SHUTDOWN),
     };
 }
 

@@ -17,7 +17,8 @@ interactionModels/custom/pt-BR.json   slot types GERADOS por `npm run catalog:sy
 agent/         Agente Windows: `npm run build:pacote` → dist/O Monstro/ (node.exe OFICIAL assinado + o-monstro.cjs)
                NÃO voltar para .exe único (SEA/postject): quebra a assinatura e o antivírus bloqueia.
   src/core     núcleo: inicia com o Windows (tarefa agendada S4U), conecta ao broker, executa ações sem tela
-  src/desktop  sessão do usuário (logon): ícone na bandeja + ações que precisam de tela, via named pipe
+  src/desktop  sessão do usuário (logon): ícone na bandeja + ações que precisam de tela, via canal local TCP 127.0.0.1
+               (porta em core-endpoint.json; NÃO named pipe: a DACL do pipe criado em S4U bloqueia a sessão interativa)
   src/install  assistente de instalação/desinstalação ("Instalar O Monstro.cmd" → node.exe o-monstro.cjs --instalar)
 ```
 

@@ -59,7 +59,7 @@ async function runCore() {
     let transport;
 
     const bridge = createDesktopBridge({
-        pipeName: paths.PIPE_NAME,
+        endpointFile: paths.CORE_ENDPOINT_FILE,
         pipeSecret: config.pipeSecret,
         logger,
         getStatus: () => ({ broker: brokerStatus, paused: pauseState.isPaused() }),
@@ -102,7 +102,7 @@ function runDesktop() {
     installGlobalErrorHandlers(logger);
     const { config, localActions } = loadRuntimeConfig(logger);
     const session = createDesktopSession({
-        pipeName: paths.PIPE_NAME,
+        endpointFile: paths.CORE_ENDPOINT_FILE,
         pipeSecret: config.pipeSecret,
         localActions,
         executor: createActionExecutor({ logger }),
