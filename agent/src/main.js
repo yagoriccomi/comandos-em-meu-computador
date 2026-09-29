@@ -148,7 +148,10 @@ async function main(argv) {
 function waitForEnter() {
     if (!process.stdin.isTTY) return Promise.resolve();
     process.stdout.write('Pressione Enter para fechar');
-    return new Promise((resolve) => process.stdin.once('data', resolve));
+    return new Promise((resolve) => {
+        process.stdin.once('data', resolve);
+        process.stdin.resume(); // o readline das perguntas deixa o stdin pausado; sem isso a janela fechava
+    });
 }
 
 main(process.argv.slice(2)).catch(async (error) => {

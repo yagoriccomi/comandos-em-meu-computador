@@ -133,16 +133,31 @@ function assertDataDirectoryIsTrusted(userSid) {
     }
 }
 
+/**
+ * Comandos icacls da pasta de dados. A ACL explícita vai SÓ na raiz; subpastas e arquivos voltam a herdá-la
+ * (/reset). Aplicar /inheritance:r com /T removia a herança de cada arquivo e os deixava sem acesso nenhum.
+ */
+function dataDirectoryAclCommands(dataDir, userSid, hasChildren) {
+    const commands = [
+        [dataDir, '/setowner', SID_ADMINISTRATORS, '/T', '/C', '/Q'],
+        [
+            dataDir, '/inheritance:r',
+            '/grant:r', `${SID_SYSTEM}:(OI)(CI)F`,
+            '/grant:r', `${SID_ADMINISTRATORS}:(OI)(CI)F`,
+            '/grant:r', `*${userSid}:(OI)(CI)M`,
+            '/Q',
+        ],
+    ];
+    if (hasChildren) commands.push([path.join(dataDir, '*'), '/reset', '/T', '/C', '/Q']);
+    return commands;
+}
+
 function restrictDataDirectory(userSid) {
     const icacls = path.join(SYSTEM32, 'icacls.exe');
-    childProcess.execFileSync(icacls, [paths.DATA_DIR, '/setowner', SID_ADMINISTRATORS, '/T', '/C', '/Q'], { stdio: 'ignore', windowsHide: true });
-    childProcess.execFileSync(icacls, [
-        paths.DATA_DIR, '/inheritance:r',
-        '/grant:r', `${SID_SYSTEM}:(OI)(CI)F`,
-        '/grant:r', `${SID_ADMINISTRATORS}:(OI)(CI)F`,
-        '/grant:r', `*${userSid}:(OI)(CI)M`,
-        '/T', '/Q',
-    ], { stdio: 'ignore', windowsHide: true });
+    const hasChildren = fs.readdirSync(paths.DATA_DIR).length > 0;
+    for (const args of dataDirectoryAclCommands(paths.DATA_DIR, userSid, hasChildren)) {
+        childProcess.execFileSync(icacls, args, { stdio: 'ignore', windowsHide: true });
+    }
 }
 
 function writeJson(filePath, content) {
@@ -278,4 +293,4 @@ async function runUninstall() {
     }
 }
 
-module.exports = { runInstall, runUninstall };
+module.exports = { runInstall, runUninstall, dataDirectoryAclCommands };
