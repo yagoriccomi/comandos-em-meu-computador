@@ -23,7 +23,9 @@ const ANSWERS = {
 test('shouldNormalizeBrokerAddressToTlsUrl', () => {
     assert.equal(normalizeBrokerUrl('abc123.s1.eu.hivemq.cloud'), 'mqtts://abc123.s1.eu.hivemq.cloud:8883');
     assert.equal(normalizeBrokerUrl(' mqtts://ABC.s1.eu.hivemq.cloud:8883/ '), 'mqtts://abc.s1.eu.hivemq.cloud:8883');
-    for (const bad of ['', 'localhost', 'abc.cloud:porta', 'http://abc.cloud', 'abc.cloud:8883:1', 'a b.cloud']) {
+    const pastedSkillId = 'amzn1.ask.skill.72c3ff9a-ae21-4e2a-8ab1-79f8da5cd1da';
+    const websocketUrl = 'abc.s1.eu.hivemq.cloud:8884/mqtt';
+    for (const bad of ['', 'localhost', 'abc.cloud:porta', 'http://abc.cloud', 'abc.cloud:8883:1', 'a b.cloud', pastedSkillId, websocketUrl, '10.0.0.1']) {
         assert.equal(normalizeBrokerUrl(bad), undefined, bad);
     }
 });
@@ -67,7 +69,9 @@ test('shouldBuildLogonTaskForInteractiveSession', () => {
     const xml = desktopTaskXml({ userSid: USER_SID, ...PROGRAM });
     assert.match(xml, new RegExp(`<LogonTrigger><Enabled>true</Enabled><UserId>${USER_SID}</UserId>`));
     assert.match(xml, /<LogonType>InteractiveToken<\/LogonType>/);
-    assert.match(xml, /o-monstro\.cjs&quot; --desktop<\/Arguments>/);
+    // Sem janela de console: conhost em modo headless hospeda o node.exe.
+    assert.match(xml, /<Command>[^<]*\\conhost\.exe<\/Command>/);
+    assert.match(xml, /<Arguments>--headless &quot;C:\\Program Files\\OMonstro\\node\.exe&quot; &quot;C:\\Program Files\\OMonstro\\o-monstro\.cjs&quot; --desktop<\/Arguments>/);
 });
 
 test('shouldEscapeExecutablePathInTaskXml', () => {
