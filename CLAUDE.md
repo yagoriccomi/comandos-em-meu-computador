@@ -10,14 +10,15 @@ lambda/        Skill Alexa-hosted (Node, CommonJS, compatível com Node 18)
   handlers/    Intents (canHandle/handle do ASK SDK) — sem regra de negócio
   domain/      catálogo público, slot → actionId, validação de params
   messaging/   envia cmd e espera ack pelo broker MQTT
-  protocol/    mensagens assinadas (o agente importa daqui via agent/src/shared.js; esbuild embute no .exe)
+  protocol/    mensagens assinadas (o agente importa daqui via agent/src/shared.js; esbuild embute no bundle)
   config/      segredos lidos de config/secrets.json no bucket S3 da skill
   catalog/     skill-catalog.json — FONTE DA VERDADE pública das ações
 interactionModels/custom/pt-BR.json   slot types GERADOS por `npm run catalog:sync` (em lambda/)
-agent/         Agente Windows (Node 24 → o-monstro.exe via Single Executable Application)
+agent/         Agente Windows: `npm run build:pacote` → dist/O Monstro/ (node.exe OFICIAL assinado + o-monstro.cjs)
+               NÃO voltar para .exe único (SEA/postject): quebra a assinatura e o antivírus bloqueia.
   src/core     núcleo: inicia com o Windows (tarefa agendada S4U), conecta ao broker, executa ações sem tela
   src/desktop  sessão do usuário (logon): ícone na bandeja + ações que precisam de tela, via named pipe
-  src/install  assistente de instalação/desinstalação (o próprio .exe)
+  src/install  assistente de instalação/desinstalação ("Instalar O Monstro.cmd" → node.exe o-monstro.cjs --instalar)
 ```
 
 Fluxo: fala → intent → `actionId` do catálogo → confirmação por voz se `requiresConfirmation` →

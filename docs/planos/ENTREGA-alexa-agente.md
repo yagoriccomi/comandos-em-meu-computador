@@ -16,7 +16,7 @@
 | Skill (handlers, confirmação por voz, segredos do S3, MQTT + ack) | `lambda/index.js`, `lambda/handlers/*`, `lambda/domain/*`, `lambda/config/*`, `lambda/messaging/*`, `lambda/speech.js` |
 | Agente: catálogo local, executor sem shell, segurança, log | `agent/src/config/*`, `agent/src/executor/*`, `agent/src/security/*`, `agent/src/logger/*` |
 | Agente: núcleo, pipe com autenticação mútua, desktop, ícone | `agent/src/core/*`, `agent/src/desktop/*` |
-| Instalador em executável único + build | `agent/src/install/*`, `agent/src/main.js`, `agent/build/build-exe.js` |
+| Instalador (pasta com Node oficial assinado) + build | `agent/src/install/*`, `agent/src/main.js`, `agent/build/build-package.js` |
 | Simulador da Alexa, docs | `agent/scripts/simular-alexa.js`, `README.md`, `CLAUDE.md`, `REVIEW.md` |
 
 ## Verificação

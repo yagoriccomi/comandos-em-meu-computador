@@ -6,7 +6,7 @@
 ## 📊 Resumo Executivo
 
 Stack: skill Alexa-hosted em Node (ASK SDK v2, CommonJS) → HiveMQ Cloud (MQTT/TLS 8883) → agente Windows em Node 24
-empacotado como Single Executable Application, com núcleo em tarefa agendada (S4U, boot) e sessão de desktop
+distribuído como pasta com o `node.exe` oficial assinado + bundle, com núcleo em tarefa agendada (S4U, boot) e sessão de desktop
 (logon) ligadas por named pipe. Não há banco de dados, front-end web nem API HTTP própria.
 
 **Nível de risco atual: BAIXO.** O caminho crítico (voz → execução) está fechado por lista: o `actionId` sai do
@@ -15,11 +15,11 @@ catálogo, o parâmetro é inteiro validado nas duas pontas, a mensagem é assin
 `npm audit`: 0 vulnerabilidades em `lambda/` e `agent/`. Nenhum segredo no código nem no histórico do Git.
 
 Três achados de risco Alto/Médio foram corrigidos durante a auditoria (pipe squatting, pasta de dados
-pré-criada, orçamento de tempo da Alexa). Permanece **um bloqueio de entrega**: o `o-monstro.exe` é removido pelo
-Kaspersky (heurística sobre executável não assinado) — ver Risco Alto.
+pré-criada, orçamento de tempo da Alexa). O bloqueio do antivírus sobre o `.exe` único foi resolvido trocando
+a distribuição por uma pasta com o Node oficial assinado — ver Risco Alto.
 
 **Não auditado:** comportamento real no Windows das tarefas S4U antes do logon, o instalador interativo e o
-ícone ponta a ponta com o `.exe` (bloqueados pelo antivírus); configuração do cluster HiveMQ (fora do repositório).
+ícone ponta a ponta (dependem da instalação real); configuração do cluster HiveMQ (fora do repositório).
 
 ## 🔥 Top 5 Causas de Vazamento — veredicto obrigatório
 
@@ -38,7 +38,7 @@ Kaspersky (heurística sobre executável não assinado) — ver Risco Alto.
   (Lei 13.709/2018, art. 4º, I). Ainda assim, a minimização foi aplicada: nenhuma PII chega à Lambda ou ao
   broker; o `userId` da Alexa não é logado (`lambda/handlers/builtInHandlers.js:35`, teste
   `lambda/test/skill.test.js` › `shouldNeverLogPersonalData`); a saída das ações fica só no log local mascarado
-  (`agent/src/logger/localLogger.js:23`). Exclusão: `o-monstro.exe --desinstalar` apaga dados locais; o
+  (`agent/src/logger/localLogger.js:23`). Exclusão: `Desinstalar O Monstro.cmd` apaga dados locais; o
   `config/secrets.json` do S3 é apagado manualmente no console da Alexa (documentado no README).
 
 ## 🐛 Risco Alto (Bugs e Arquitetura)
@@ -55,14 +55,16 @@ Kaspersky (heurística sobre executável não assinado) — ver Risco Alto.
   * **Onde estava:** `agent/src/install/installer.js` (`runInstall`).
   * **Como foi refatorado:** o instalador aborta se o dono não for Administradores/SYSTEM/o próprio usuário e
     fixa o dono em Administradores antes de aplicar a ACL restrita.
-* **Aberto — Executável bloqueado pelo antivírus (entrega) [#79][#84]**: o Kaspersky remove o
-  `agent/dist/o-monstro.exe` logo após o build (cópia do `node.exe` modificada por `postject`, sem assinatura,
-  que registra tarefas de boot e chama `schtasks`/`icacls`/`shutdown` — perfil que heurísticas tratam como suspeito).
-  * **Onde está:** `agent/build/build-exe.js`.
-  * **Como resolver (decisão do dono, não de código):** (a) restaurar da quarentena e criar exceção no Kaspersky
-    para `agent\dist\` e `C:\Program Files\OMonstro\`; (b) reportar falso positivo ao Kaspersky; (c) assinar o
-    executável com certificado de assinatura de código; (d) empacotar como pasta com o `node.exe` oficial
-    assinado + script (deixa de ser arquivo único). Não se deve tentar contornar a detecção.
+* **✅ Resolvido (branch `feature/instalador-em-pasta`) — Executável único bloqueado pelo antivírus (entrega) [#79][#84]**:
+  o Kaspersky classificava o `o-monstro.exe` (Node SEA: `node.exe` modificado por `postject`, assinatura
+  invalidada) como `HEUR:Trojan-Downloader.Script.Generic` pela heurística sobre o `o-monstro.cjs` embutido,
+  colocava-o no grupo "Não confiável" do Controle de Aplicativos e bloqueava a inicialização, **mesmo com exclusões**.
+  O `node.exe` oficial foi classificado como Confiável (KSN, OpenJS Foundation).
+  * **Onde estava:** `agent/build/build-exe.js` (removido).
+  * **Solução aplicada:** `agent/build/build-package.js` gera uma pasta com o `node.exe` oficial **inalterado**
+    (o build falha se a assinatura não for válida da OpenJS Foundation) + `o-monstro.cjs` + `Instalar O Monstro.cmd`;
+    as tarefas agendadas executam `node.exe "…\o-monstro.cjs" --nucleo|--desktop`. Nenhuma tentativa de
+    contornar a detecção: o JavaScript continua sendo analisado e depende de exclusão/falso positivo reportado.
 
 ## ⚠️ Risco Médio (Performance e Infraestrutura)
 
@@ -113,7 +115,7 @@ Kaspersky (heurística sobre executável não assinado) — ver Risco Alto.
 
 ## ✅ Plano de Ação Imediato
 
-1. Decidir o tratamento do bloqueio do Kaspersky (exceção/falso positivo/assinatura) e gerar o `.exe` de novo.
-2. Instalar, conferir o ícone e rodar `npm run simular -- bloquear_tela` e `-- cancelar_desligamento` em `agent/`.
+1. Reportar o falso positivo `HEUR:Trojan-Downloader.Script.Generic` ao Kaspersky (opentip.kaspersky.com).
+2. Instalar pelo `Instalar O Monstro.cmd`, conferir o ícone e rodar `npm run simular -- bloquear_tela` e `-- cancelar_desligamento` em `agent/`.
 3. Confirmar que `desligar_em_minutos` funciona **antes do logon** (limitação conhecida do S4U); se não, avaliar núcleo como SYSTEM.
 4. Na publicação: enviar `secrets.json` ao S3, apagar a cópia local e preencher `allowedUserIdHashes`.
