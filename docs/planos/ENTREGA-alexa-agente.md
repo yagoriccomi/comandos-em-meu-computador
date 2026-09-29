@@ -39,3 +39,17 @@ P1–P8 do plano. Mudança em relação ao plano: o protocolo não é mais copia
 3. Validar desligar/reiniciar **antes do logon** (tarefa S4U).
 4. Publicação da skill (combinado para depois).
 5. Próximo passo natural do pipeline: `configurar-ci-cd-projeto` (rodar os testes a cada push).
+
+## Verificação real no PC (2026-09-29, instalador em pasta)
+
+Com o HiveMQ real, pelo `npm run simular` (faz o papel da Lambda):
+
+| Ação | Caminho | Resultado | Tempo |
+|---|---|---|---|
+| `cancelar_desligamento` sem nada agendado | núcleo | "Não consegui" (esperado, código 1116) | 3,8 s |
+| `abrir_netflix` | núcleo → canal local → desktop | "Feito." | 2,2 s |
+| `desligar_em_minutos` 240 | núcleo (S4U) | "Feito." — permissão de desligar confirmada | 3,2 s |
+| `cancelar_desligamento` | núcleo | "Feito." (desligamento cancelado) | 2,0 s |
+
+Pendências restantes: publicação da skill (enviar `secrets.json` ao S3), validar desligar com o PC na tela de
+login (antes de qualquer logon) e texto do `stderr` com acentos corrompidos no log local (codificação do console).
