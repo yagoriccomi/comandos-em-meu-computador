@@ -86,16 +86,16 @@ test('shouldRejectInvalidUserSid', () => {
 
 test('shouldApplyExplicitAclOnlyOnDataRootAndResetChildrenToInherit', () => {
     const { dataDirectoryAclCommands } = require('../src/install/installer');
-    const [setOwner, rootAcl, resetChildren] = dataDirectoryAclCommands('C:\ProgramData\OMonstro', USER_SID, true);
+    const [setOwner, rootAcl, resetChildren] = dataDirectoryAclCommands('C:\\ProgramData\\OMonstro', USER_SID, true);
     assert.ok(setOwner.includes('/setowner'));
     assert.ok(rootAcl.includes('/inheritance:r'));
     assert.ok(!rootAcl.includes('/T'), '/inheritance:r com /T tirava o acesso de cada arquivo existente');
     assert.ok(rootAcl.includes(`*${USER_SID}:(OI)(CI)M`));
     assert.deepEqual(resetChildren.slice(1), ['/reset', '/T', '/C', '/Q']);
-    assert.ok(resetChildren[0].endsWith('\*'));
+    assert.equal(resetChildren[0], 'C:\\ProgramData\\OMonstro\\*');
 });
 
 test('shouldSkipChildResetOnEmptyDataDirectory', () => {
     const { dataDirectoryAclCommands } = require('../src/install/installer');
-    assert.equal(dataDirectoryAclCommands('C:\ProgramData\OMonstro', USER_SID, false).length, 2);
+    assert.equal(dataDirectoryAclCommands('C:\\ProgramData\\OMonstro', USER_SID, false).length, 2);
 });
