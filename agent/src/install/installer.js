@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Assistente de instalação/desinstalação do O Monstro (o próprio o-monstro.exe).
+ * Assistente de instalação/desinstalação do O Monstro (roda como `node.exe o-monstro.cjs --instalar`).
  * Roda como administrador; as tarefas criadas rodam como o usuário, sem privilégio elevado.
  */
 const childProcess = require('child_process');
@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const paths = require('../config/paths');
 const { validateAgentConfig, loadAgentConfig } = require('../config/agentConfig');
-const { isPackagedExe, readAsset } = require('../assets');
+const { PACKAGED_FILES, currentAppFile, isPackagedInstall, packageDirectory, readAsset } = require('../assets');
 const { createConsolePrompt } = require('./consolePrompt');
 const { normalizeBrokerUrl, isValidSkillId, generateIdentity, buildConfigFiles } = require('./secretsFactory');
 const tasks = require('./windowsTasks');
@@ -23,6 +23,12 @@ const DEFAULT_PC_USER = 'pc-o-monstro';
 const DEFAULT_ALEXA_USER = 'alexa-o-monstro';
 const USER_SID_ARG = '--usuario-sid=';
 const UTF8_BOM = '\uFEFF';
+const UNINSTALL_SCRIPT_CONTENT = [
+    '@echo off',
+    'rem Remove o agente O Monstro deste computador.',
+    '"%~dp0node.exe" "%~dp0o-monstro.cjs" --desinstalar',
+    '',
+].join('\r\n');
 
 function isElevated() {
     try {
@@ -44,9 +50,14 @@ function quotePowerShell(text) {
     return `'${String(text).replace(/'/g, "''")}'`;
 }
 
-/** Reabre este mesmo .exe pedindo permissão de administrador (UAC). */
+/** Start-Process junta a lista com espaços sem aspas: argumentos com espaço precisam de aspas duplas. */
+function quoteProcessArgument(text) {
+    return /\s/.test(text) ? `"${text}"` : text;
+}
+
+/** Reabre o agente (node.exe + bundle) pedindo permissão de administrador (UAC). */
 function relaunchElevated(args) {
-    const argumentList = args.map(quotePowerShell).join(',');
+    const argumentList = [currentAppFile(), ...args].map(quoteProcessArgument).map(quotePowerShell).join(',');
     const command = `Start-Process -FilePath ${quotePowerShell(process.execPath)} -ArgumentList @(${argumentList}) -Verb RunAs`;
     childProcess.execFileSync(POWERSHELL_EXE, ['-NoProfile', '-NonInteractive', '-Command', command], { stdio: 'ignore', windowsHide: true });
 }
@@ -148,15 +159,19 @@ function readExistingConfig() {
 
 function installProgramFiles() {
     fs.mkdirSync(paths.INSTALL_DIR, { recursive: true });
-    if (path.resolve(process.execPath).toLowerCase() !== path.resolve(paths.INSTALLED_EXE).toLowerCase()) {
-        fs.copyFileSync(process.execPath, paths.INSTALLED_EXE);
+    const sourceDir = path.resolve(packageDirectory()).toLowerCase();
+    if (sourceDir !== path.resolve(paths.INSTALL_DIR).toLowerCase()) {
+        for (const fileName of PACKAGED_FILES) {
+            fs.copyFileSync(path.join(packageDirectory(), fileName), path.join(paths.INSTALL_DIR, fileName));
+        }
     }
     const tray = readAsset('tray.ps1');
     fs.writeFileSync(paths.TRAY_SCRIPT, tray.startsWith(UTF8_BOM) ? tray : `${UTF8_BOM}${tray}`); // PowerShell 5.1 precisa do BOM
+    fs.writeFileSync(paths.UNINSTALL_SCRIPT, UNINSTALL_SCRIPT_CONTENT);
 }
 
 async function runInstall(argv) {
-    if (!isPackagedExe()) throw new Error('O instalador só funciona a partir do o-monstro.exe (gere com: npm run build:exe).');
+    if (!isPackagedInstall()) throw new Error('O instalador só funciona a partir do pacote gerado (npm run build:pacote → "Instalar O Monstro.cmd").');
     if (!isElevated()) {
         relaunchElevated(['--instalar', `${USER_SID_ARG}${currentUserSid()}`]);
         return;
@@ -195,14 +210,16 @@ async function runInstall(argv) {
         installProgramFiles();
 
         prompt.say('Registrando a inicialização automática…');
-        tasks.registerTask(tasks.CORE_TASK, tasks.coreTaskXml({ userSid, exePath: paths.INSTALLED_EXE }));
-        tasks.registerTask(tasks.DESKTOP_TASK, tasks.desktopTaskXml({ userSid, exePath: paths.INSTALLED_EXE }));
+        const program = { userSid, nodePath: paths.INSTALLED_NODE, appPath: paths.INSTALLED_APP };
+        tasks.registerTask(tasks.CORE_TASK, tasks.coreTaskXml(program));
+        tasks.registerTask(tasks.DESKTOP_TASK, tasks.desktopTaskXml(program));
         tasks.runTask(tasks.CORE_TASK);
         tasks.runTask(tasks.DESKTOP_TASK);
 
         prompt.say('\n✔ Instalação concluída. O ícone do O Monstro deve aparecer perto do relógio.');
         prompt.say(`\nSuas ações ficam em: ${paths.ACTIONS_FILE}`);
         prompt.say(`Logs locais em:     ${paths.LOG_DIR}`);
+        prompt.say(`Para desinstalar:   ${paths.UNINSTALL_SCRIPT}`);
         if (alexaSecretsFile) {
             prompt.say('\nPRÓXIMO PASSO (na publicação da skill):');
             prompt.say(`  Envie ${alexaSecretsFile}`);

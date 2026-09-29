@@ -1,6 +1,6 @@
 'use strict';
 /*
- * o-monstro.exe
+ * node.exe o-monstro.cjs   (instalado em C:\Program Files\OMonstro, com o Node.js oficial assinado)
  *   (sem argumentos) | --instalar   assistente de instalação
  *   --nucleo                        núcleo (tarefa agendada na inicialização do Windows)
  *   --desktop                       ícone na bandeja + ações de tela (tarefa agendada no logon)
@@ -21,7 +21,7 @@ const { createDesktopBridge } = require('./core/desktopBridge');
 const { createAgentCore } = require('./core/agentCore');
 const { createDesktopSession, createStatusFileWriter } = require('./desktop/desktopSession');
 const { startTray } = require('./desktop/trayController');
-const { isPackagedExe, DEV_ASSET_PATHS } = require('./assets');
+const { isPackagedInstall, DEV_ASSET_PATHS } = require('./assets');
 
 const VERSION = '1.0.0';
 const EXIT_FAILURE = 1;
@@ -111,7 +111,7 @@ function runDesktop() {
     });
     session.start();
     startTray({
-        trayScript: isPackagedExe() ? paths.TRAY_SCRIPT : DEV_ASSET_PATHS['tray.ps1'],
+        trayScript: isPackagedInstall() ? paths.TRAY_SCRIPT : DEV_ASSET_PATHS['tray.ps1'],
         statusFile: paths.STATUS_FILE,
         logFile: path.join(paths.LOG_DIR, 'agent.log'),
         session,
@@ -138,7 +138,7 @@ async function main(argv) {
         case '--instalar':
             return require('./install/installer').runInstall(argv);
         default:
-            console.error('Uso: o-monstro.exe [--instalar | --desinstalar | --versao]');
+            console.error('Uso: node.exe o-monstro.cjs [--instalar | --desinstalar | --versao]');
             process.exitCode = EXIT_FAILURE;
             return undefined;
     }

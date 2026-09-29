@@ -7,7 +7,10 @@ const { normalizeBrokerUrl, isValidSkillId, generateIdentity, buildConfigFiles }
 const { coreTaskXml, desktopTaskXml } = require('../src/install/windowsTasks');
 
 const USER_SID = 'S-1-5-21-1111111111-2222222222-3333333333-1001';
-const EXE = 'C:\\Program Files\\OMonstro\\o-monstro.exe';
+const PROGRAM = Object.freeze({
+    nodePath: 'C:\\Program Files\\OMonstro\\node.exe',
+    appPath: 'C:\\Program Files\\OMonstro\\o-monstro.cjs',
+});
 const ANSWERS = {
     brokerUrl: 'mqtts://abc123.s1.eu.hivemq.cloud:8883',
     pcUser: 'pc-o-monstro',
@@ -51,26 +54,32 @@ test('shouldProduceConfigsAcceptedByAgentAndSkillWithSameSharedSecret', () => {
 });
 
 test('shouldBuildBootTaskWithoutStoredPasswordAndWithRestart', () => {
-    const xml = coreTaskXml({ userSid: USER_SID, exePath: EXE });
+    const xml = coreTaskXml({ userSid: USER_SID, ...PROGRAM });
     assert.match(xml, /<BootTrigger>/);
     assert.match(xml, /<LogonType>S4U<\/LogonType>/);
     assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
     assert.match(xml, /<RestartOnFailure>/);
-    assert.match(xml, /<Arguments>--nucleo<\/Arguments>/);
+    assert.match(xml, /<Command>C:\\Program Files\\OMonstro\\node\.exe<\/Command>/);
+    assert.match(xml, /<Arguments>&quot;C:\\Program Files\\OMonstro\\o-monstro\.cjs&quot; --nucleo<\/Arguments>/);
 });
 
 test('shouldBuildLogonTaskForInteractiveSession', () => {
-    const xml = desktopTaskXml({ userSid: USER_SID, exePath: EXE });
+    const xml = desktopTaskXml({ userSid: USER_SID, ...PROGRAM });
     assert.match(xml, new RegExp(`<LogonTrigger><Enabled>true</Enabled><UserId>${USER_SID}</UserId>`));
     assert.match(xml, /<LogonType>InteractiveToken<\/LogonType>/);
+    assert.match(xml, /o-monstro\.cjs&quot; --desktop<\/Arguments>/);
 });
 
 test('shouldEscapeExecutablePathInTaskXml', () => {
-    const xml = coreTaskXml({ userSid: USER_SID, exePath: 'C:\\A&B\\<x>.exe' });
+    const xml = coreTaskXml({ userSid: USER_SID, nodePath: 'C:\\A&B\\<x>.exe', appPath: PROGRAM.appPath });
     assert.match(xml, /C:\\A&amp;B\\&lt;x&gt;\.exe/);
 });
 
+test('shouldRejectAppPathThatCouldBreakArgumentQuoting', () => {
+    assert.throws(() => coreTaskXml({ userSid: USER_SID, ...PROGRAM, appPath: 'C:\\x" --desinstalar "' }), /inválido/);
+});
+
 test('shouldRejectInvalidUserSid', () => {
-    assert.throws(() => coreTaskXml({ userSid: 'S-1-5-18', exePath: EXE }), /SID/);
-    assert.throws(() => desktopTaskXml({ userSid: '</UserId><x>', exePath: EXE }), /SID/);
+    assert.throws(() => coreTaskXml({ userSid: 'S-1-5-18', ...PROGRAM }), /SID/);
+    assert.throws(() => desktopTaskXml({ userSid: '</UserId><x>', ...PROGRAM }), /SID/);
 });

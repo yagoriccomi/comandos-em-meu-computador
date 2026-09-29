@@ -42,7 +42,13 @@ function settingsXml() {
   </Settings>`;
 }
 
-function taskXml({ description, trigger, userSid, logonType, exePath, argument }) {
+/** Argumentos da tarefa: o bundle entre aspas (Program Files tem espaço) + o modo. */
+function appArguments(appPath, mode) {
+    if (String(appPath).includes('"')) throw new Error('caminho do aplicativo inválido');
+    return `"${appPath}" ${mode}`;
+}
+
+function taskXml({ description, trigger, userSid, logonType, nodePath, appPath, mode }) {
     assertUserSid(userSid);
     return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -52,33 +58,35 @@ function taskXml({ description, trigger, userSid, logonType, exePath, argument }
     <Principal id="Author"><UserId>${userSid}</UserId><LogonType>${logonType}</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal>
   </Principals>
 ${settingsXml()}
-  <Actions Context="Author"><Exec><Command>${escapeXml(exePath)}</Command><Arguments>${escapeXml(argument)}</Arguments></Exec></Actions>
+  <Actions Context="Author"><Exec><Command>${escapeXml(nodePath)}</Command><Arguments>${escapeXml(appArguments(appPath, mode))}</Arguments></Exec></Actions>
 </Task>
 `;
 }
 
 /** Núcleo: sobe na inicialização do Windows, antes do logon, sem guardar senha (S4U). */
-function coreTaskXml({ userSid, exePath }) {
+function coreTaskXml({ userSid, nodePath, appPath }) {
     return taskXml({
         description: 'O Monstro: núcleo do agente (executa ações pedidas pela Alexa). Inicia com o Windows.',
         trigger: `<BootTrigger><Enabled>true</Enabled><Delay>${BOOT_DELAY}</Delay></BootTrigger>`,
         userSid,
         logonType: 'S4U',
-        exePath,
-        argument: '--nucleo',
+        nodePath,
+        appPath,
+        mode: '--nucleo',
     });
 }
 
 /** Sessão de desktop: sobe no logon do usuário (ícone na bandeja + ações de tela). */
-function desktopTaskXml({ userSid, exePath }) {
+function desktopTaskXml({ userSid, nodePath, appPath }) {
     assertUserSid(userSid);
     return taskXml({
         description: 'O Monstro: ícone na bandeja e ações que precisam da área de trabalho.',
         trigger: `<LogonTrigger><Enabled>true</Enabled><UserId>${userSid}</UserId></LogonTrigger>`,
         userSid,
         logonType: 'InteractiveToken',
-        exePath,
-        argument: '--desktop',
+        nodePath,
+        appPath,
+        mode: '--desktop',
     });
 }
 
