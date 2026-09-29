@@ -86,6 +86,9 @@ async function testMqttLogin(url, username, password) {
     }
 }
 
+const CHANGE_BROKER = Symbol('trocar endereço do cluster');
+
+/** @returns {Promise<{ username: string, password: string } | typeof CHANGE_BROKER>} */
 async function askCredentials(prompt, brokerUrl, label, defaultUser) {
     for (;;) {
         const username = await prompt.ask(`  Usuário da credencial ${label}`, { defaultValue: defaultUser });
@@ -96,20 +99,34 @@ async function askCredentials(prompt, brokerUrl, label, defaultUser) {
             prompt.say('  ✔ Conectou.');
             return { username, password };
         }
-        prompt.say(`  ✖ Não consegui conectar (${result.reason}). Confira usuário, senha e o endereço do cluster.`);
+        if (result.reason === 'servidor inacessível') {
+            // Servidor não respondeu: o problema é o endereço (ou a internet), não o usuário/senha.
+            prompt.say('  ✖ O servidor não respondeu. Confira o endereço do cluster e a internet.');
+            if (await prompt.confirm('  Corrigir o endereço do cluster?')) return CHANGE_BROKER;
+        } else {
+            prompt.say(`  ✖ Usuário ou senha recusados pelo HiveMQ. Confira a credencial ${label} em Access Management.`);
+        }
         if (!(await prompt.confirm('  Tentar de novo?'))) throw new Error('instalação cancelada pelo usuário');
     }
 }
 
-async function askAnswers(prompt) {
-    prompt.say('\n1/3 · Servidor de mensagens (HiveMQ Cloud → Overview → Cluster URL)');
+async function askBrokerUrl(prompt) {
+    prompt.say('\n1/3 · Servidor de mensagens (HiveMQ Cloud → Overview → TLS MQTT URL)');
     const brokerInput = await prompt.askUntilValid('  Endereço do cluster', (value) => Boolean(normalizeBrokerUrl(value)),
-        'Endereço inválido. Exemplo: abc123.s1.eu.hivemq.cloud');
-    const brokerUrl = normalizeBrokerUrl(brokerInput);
+        'Isso não parece um endereço de servidor. Exemplo: abc123.s1.eu.hivemq.cloud:8883');
+    return normalizeBrokerUrl(brokerInput);
+}
 
-    prompt.say('\n2/3 · Credenciais criadas em HiveMQ Cloud → Access Management');
-    const pc = await askCredentials(prompt, brokerUrl, 'do PC', DEFAULT_PC_USER);
-    const alexa = await askCredentials(prompt, brokerUrl, 'da Alexa', DEFAULT_ALEXA_USER);
+async function askAnswers(prompt) {
+    let brokerUrl;
+    let pc;
+    let alexa;
+    do {
+        brokerUrl = await askBrokerUrl(prompt);
+        prompt.say('\n2/3 · Credenciais criadas em HiveMQ Cloud → Access Management');
+        pc = await askCredentials(prompt, brokerUrl, 'do PC', DEFAULT_PC_USER);
+        alexa = pc === CHANGE_BROKER ? CHANGE_BROKER : await askCredentials(prompt, brokerUrl, 'da Alexa', DEFAULT_ALEXA_USER);
+    } while (pc === CHANGE_BROKER || alexa === CHANGE_BROKER);
 
     prompt.say('\n3/3 · Skill ID (developer.amazon.com → sua skill → "Copy Skill ID")');
     const skillId = await prompt.askUntilValid('  Skill ID', isValidSkillId, 'Formato esperado: amzn1.ask.skill.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx');
@@ -199,16 +216,18 @@ async function runInstall(argv) {
         prompt.say('==============================================');
 
         let alexaSecretsFile;
-        const existing = readExistingConfig();
-        const keepExisting = existing && await prompt.confirm('\nJá existe uma instalação. Manter a configuração atual (recomendado)?');
-
         prompt.say('\nParando o agente, se estiver rodando…');
         tasks.stopTask(tasks.CORE_TASK);
         tasks.stopTask(tasks.DESKTOP_TASK);
 
+        // Permissões antes de ler a configuração: se estiverem quebradas, o config.json existente ficaria
+        // ilegível e a pergunta "manter configuração" nem apareceria.
         assertDataDirectoryIsTrusted(userSid);
         fs.mkdirSync(paths.LOG_DIR, { recursive: true });
         restrictDataDirectory(userSid);
+
+        const existing = readExistingConfig();
+        const keepExisting = existing && await prompt.confirm('\nJá existe uma instalação. Manter a configuração atual (recomendado)?');
 
         if (!keepExisting) {
             const answers = await askAnswers(prompt);
