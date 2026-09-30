@@ -5,7 +5,9 @@ const crypto = require('crypto');
 const SECRET_BYTES = 32;
 const DEVICE_ID_RANDOM_BYTES = 6;
 const DEFAULT_MQTT_PORT = 8883;
-const HOST_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
+// Rótulos DNS separados por ponto; o último (domínio de topo, ex.: "cloud") só com letras. Isso recusa
+// coisas coladas por engano, como o Skill ID (amzn1.ask.skill.<uuid>).
+const HOST_PATTERN = /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$/i;
 const SKILL_ID_PATTERN = /^amzn1\.ask\.skill\.[0-9a-f-]{36}$/i;
 
 function randomSecret() {

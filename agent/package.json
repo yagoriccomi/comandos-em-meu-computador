@@ -7,8 +7,8 @@
   "bin": "src/main.js",
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
-    "build:exe": "node build/build-exe.js",
-    "simular": "node scripts/simular-alexa.js"
+    "simular": "node scripts/simular-alexa.js",
+    "build:pacote": "node build/build-package.js"
   },
   "engines": {
     "node": ">=22"
@@ -18,7 +18,6 @@
     "mqtt": "^5.10.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
-    "postject": "^1.0.0-alpha.6"
+    "esbuild": "^0.25.0"
   }
 }

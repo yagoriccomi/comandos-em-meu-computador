@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Assistente de instalação/desinstalação do O Monstro (o próprio o-monstro.exe).
+ * Assistente de instalação/desinstalação do O Monstro (roda como `node.exe o-monstro.cjs --instalar`).
  * Roda como administrador; as tarefas criadas rodam como o usuário, sem privilégio elevado.
  */
 const childProcess = require('child_process');
@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const paths = require('../config/paths');
 const { validateAgentConfig, loadAgentConfig } = require('../config/agentConfig');
-const { isPackagedExe, readAsset } = require('../assets');
+const { PACKAGED_FILES, currentAppFile, isPackagedInstall, packageDirectory, readAsset } = require('../assets');
 const { createConsolePrompt } = require('./consolePrompt');
 const { normalizeBrokerUrl, isValidSkillId, generateIdentity, buildConfigFiles } = require('./secretsFactory');
 const tasks = require('./windowsTasks');
@@ -23,6 +23,12 @@ const DEFAULT_PC_USER = 'pc-o-monstro';
 const DEFAULT_ALEXA_USER = 'alexa-o-monstro';
 const USER_SID_ARG = '--usuario-sid=';
 const UTF8_BOM = '\uFEFF';
+const UNINSTALL_SCRIPT_CONTENT = [
+    '@echo off',
+    'rem Remove o agente O Monstro deste computador.',
+    '"%~dp0node.exe" "%~dp0o-monstro.cjs" --desinstalar',
+    '',
+].join('\r\n');
 
 function isElevated() {
     try {
@@ -44,9 +50,14 @@ function quotePowerShell(text) {
     return `'${String(text).replace(/'/g, "''")}'`;
 }
 
-/** Reabre este mesmo .exe pedindo permissão de administrador (UAC). */
+/** Start-Process junta a lista com espaços sem aspas: argumentos com espaço precisam de aspas duplas. */
+function quoteProcessArgument(text) {
+    return /\s/.test(text) ? `"${text}"` : text;
+}
+
+/** Reabre o agente (node.exe + bundle) pedindo permissão de administrador (UAC). */
 function relaunchElevated(args) {
-    const argumentList = args.map(quotePowerShell).join(',');
+    const argumentList = [currentAppFile(), ...args].map(quoteProcessArgument).map(quotePowerShell).join(',');
     const command = `Start-Process -FilePath ${quotePowerShell(process.execPath)} -ArgumentList @(${argumentList}) -Verb RunAs`;
     childProcess.execFileSync(POWERSHELL_EXE, ['-NoProfile', '-NonInteractive', '-Command', command], { stdio: 'ignore', windowsHide: true });
 }
@@ -75,6 +86,9 @@ async function testMqttLogin(url, username, password) {
     }
 }
 
+const CHANGE_BROKER = Symbol('trocar endereço do cluster');
+
+/** @returns {Promise<{ username: string, password: string } | typeof CHANGE_BROKER>} */
 async function askCredentials(prompt, brokerUrl, label, defaultUser) {
     for (;;) {
         const username = await prompt.ask(`  Usuário da credencial ${label}`, { defaultValue: defaultUser });
@@ -85,20 +99,34 @@ async function askCredentials(prompt, brokerUrl, label, defaultUser) {
             prompt.say('  ✔ Conectou.');
             return { username, password };
         }
-        prompt.say(`  ✖ Não consegui conectar (${result.reason}). Confira usuário, senha e o endereço do cluster.`);
+        if (result.reason === 'servidor inacessível') {
+            // Servidor não respondeu: o problema é o endereço (ou a internet), não o usuário/senha.
+            prompt.say('  ✖ O servidor não respondeu. Confira o endereço do cluster e a internet.');
+            if (await prompt.confirm('  Corrigir o endereço do cluster?')) return CHANGE_BROKER;
+        } else {
+            prompt.say(`  ✖ Usuário ou senha recusados pelo HiveMQ. Confira a credencial ${label} em Access Management.`);
+        }
         if (!(await prompt.confirm('  Tentar de novo?'))) throw new Error('instalação cancelada pelo usuário');
     }
 }
 
-async function askAnswers(prompt) {
-    prompt.say('\n1/3 · Servidor de mensagens (HiveMQ Cloud → Overview → Cluster URL)');
+async function askBrokerUrl(prompt) {
+    prompt.say('\n1/3 · Servidor de mensagens (HiveMQ Cloud → Overview → TLS MQTT URL)');
     const brokerInput = await prompt.askUntilValid('  Endereço do cluster', (value) => Boolean(normalizeBrokerUrl(value)),
-        'Endereço inválido. Exemplo: abc123.s1.eu.hivemq.cloud');
-    const brokerUrl = normalizeBrokerUrl(brokerInput);
+        'Isso não parece um endereço de servidor. Exemplo: abc123.s1.eu.hivemq.cloud:8883');
+    return normalizeBrokerUrl(brokerInput);
+}
 
-    prompt.say('\n2/3 · Credenciais criadas em HiveMQ Cloud → Access Management');
-    const pc = await askCredentials(prompt, brokerUrl, 'do PC', DEFAULT_PC_USER);
-    const alexa = await askCredentials(prompt, brokerUrl, 'da Alexa', DEFAULT_ALEXA_USER);
+async function askAnswers(prompt) {
+    let brokerUrl;
+    let pc;
+    let alexa;
+    do {
+        brokerUrl = await askBrokerUrl(prompt);
+        prompt.say('\n2/3 · Credenciais criadas em HiveMQ Cloud → Access Management');
+        pc = await askCredentials(prompt, brokerUrl, 'do PC', DEFAULT_PC_USER);
+        alexa = pc === CHANGE_BROKER ? CHANGE_BROKER : await askCredentials(prompt, brokerUrl, 'da Alexa', DEFAULT_ALEXA_USER);
+    } while (pc === CHANGE_BROKER || alexa === CHANGE_BROKER);
 
     prompt.say('\n3/3 · Skill ID (developer.amazon.com → sua skill → "Copy Skill ID")');
     const skillId = await prompt.askUntilValid('  Skill ID', isValidSkillId, 'Formato esperado: amzn1.ask.skill.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx');
@@ -122,16 +150,31 @@ function assertDataDirectoryIsTrusted(userSid) {
     }
 }
 
+/**
+ * Comandos icacls da pasta de dados. A ACL explícita vai SÓ na raiz; subpastas e arquivos voltam a herdá-la
+ * (/reset). Aplicar /inheritance:r com /T removia a herança de cada arquivo e os deixava sem acesso nenhum.
+ */
+function dataDirectoryAclCommands(dataDir, userSid, hasChildren) {
+    const commands = [
+        [dataDir, '/setowner', SID_ADMINISTRATORS, '/T', '/C', '/Q'],
+        [
+            dataDir, '/inheritance:r',
+            '/grant:r', `${SID_SYSTEM}:(OI)(CI)F`,
+            '/grant:r', `${SID_ADMINISTRATORS}:(OI)(CI)F`,
+            '/grant:r', `*${userSid}:(OI)(CI)M`,
+            '/Q',
+        ],
+    ];
+    if (hasChildren) commands.push([path.join(dataDir, '*'), '/reset', '/T', '/C', '/Q']);
+    return commands;
+}
+
 function restrictDataDirectory(userSid) {
     const icacls = path.join(SYSTEM32, 'icacls.exe');
-    childProcess.execFileSync(icacls, [paths.DATA_DIR, '/setowner', SID_ADMINISTRATORS, '/T', '/C', '/Q'], { stdio: 'ignore', windowsHide: true });
-    childProcess.execFileSync(icacls, [
-        paths.DATA_DIR, '/inheritance:r',
-        '/grant:r', `${SID_SYSTEM}:(OI)(CI)F`,
-        '/grant:r', `${SID_ADMINISTRATORS}:(OI)(CI)F`,
-        '/grant:r', `*${userSid}:(OI)(CI)M`,
-        '/T', '/Q',
-    ], { stdio: 'ignore', windowsHide: true });
+    const hasChildren = fs.readdirSync(paths.DATA_DIR).length > 0;
+    for (const args of dataDirectoryAclCommands(paths.DATA_DIR, userSid, hasChildren)) {
+        childProcess.execFileSync(icacls, args, { stdio: 'ignore', windowsHide: true });
+    }
 }
 
 function writeJson(filePath, content) {
@@ -148,15 +191,19 @@ function readExistingConfig() {
 
 function installProgramFiles() {
     fs.mkdirSync(paths.INSTALL_DIR, { recursive: true });
-    if (path.resolve(process.execPath).toLowerCase() !== path.resolve(paths.INSTALLED_EXE).toLowerCase()) {
-        fs.copyFileSync(process.execPath, paths.INSTALLED_EXE);
+    const sourceDir = path.resolve(packageDirectory()).toLowerCase();
+    if (sourceDir !== path.resolve(paths.INSTALL_DIR).toLowerCase()) {
+        for (const fileName of PACKAGED_FILES) {
+            fs.copyFileSync(path.join(packageDirectory(), fileName), path.join(paths.INSTALL_DIR, fileName));
+        }
     }
     const tray = readAsset('tray.ps1');
     fs.writeFileSync(paths.TRAY_SCRIPT, tray.startsWith(UTF8_BOM) ? tray : `${UTF8_BOM}${tray}`); // PowerShell 5.1 precisa do BOM
+    fs.writeFileSync(paths.UNINSTALL_SCRIPT, UNINSTALL_SCRIPT_CONTENT);
 }
 
 async function runInstall(argv) {
-    if (!isPackagedExe()) throw new Error('O instalador só funciona a partir do o-monstro.exe (gere com: npm run build:exe).');
+    if (!isPackagedInstall()) throw new Error('O instalador só funciona a partir do pacote gerado (npm run build:pacote → "Instalar O Monstro.cmd").');
     if (!isElevated()) {
         relaunchElevated(['--instalar', `${USER_SID_ARG}${currentUserSid()}`]);
         return;
@@ -169,16 +216,18 @@ async function runInstall(argv) {
         prompt.say('==============================================');
 
         let alexaSecretsFile;
-        const existing = readExistingConfig();
-        const keepExisting = existing && await prompt.confirm('\nJá existe uma instalação. Manter a configuração atual (recomendado)?');
-
         prompt.say('\nParando o agente, se estiver rodando…');
         tasks.stopTask(tasks.CORE_TASK);
         tasks.stopTask(tasks.DESKTOP_TASK);
 
+        // Permissões antes de ler a configuração: se estiverem quebradas, o config.json existente ficaria
+        // ilegível e a pergunta "manter configuração" nem apareceria.
         assertDataDirectoryIsTrusted(userSid);
         fs.mkdirSync(paths.LOG_DIR, { recursive: true });
         restrictDataDirectory(userSid);
+
+        const existing = readExistingConfig();
+        const keepExisting = existing && await prompt.confirm('\nJá existe uma instalação. Manter a configuração atual (recomendado)?');
 
         if (!keepExisting) {
             const answers = await askAnswers(prompt);
@@ -195,14 +244,16 @@ async function runInstall(argv) {
         installProgramFiles();
 
         prompt.say('Registrando a inicialização automática…');
-        tasks.registerTask(tasks.CORE_TASK, tasks.coreTaskXml({ userSid, exePath: paths.INSTALLED_EXE }));
-        tasks.registerTask(tasks.DESKTOP_TASK, tasks.desktopTaskXml({ userSid, exePath: paths.INSTALLED_EXE }));
+        const program = { userSid, nodePath: paths.INSTALLED_NODE, appPath: paths.INSTALLED_APP };
+        tasks.registerTask(tasks.CORE_TASK, tasks.coreTaskXml(program));
+        tasks.registerTask(tasks.DESKTOP_TASK, tasks.desktopTaskXml(program));
         tasks.runTask(tasks.CORE_TASK);
         tasks.runTask(tasks.DESKTOP_TASK);
 
         prompt.say('\n✔ Instalação concluída. O ícone do O Monstro deve aparecer perto do relógio.');
         prompt.say(`\nSuas ações ficam em: ${paths.ACTIONS_FILE}`);
         prompt.say(`Logs locais em:     ${paths.LOG_DIR}`);
+        prompt.say(`Para desinstalar:   ${paths.UNINSTALL_SCRIPT}`);
         if (alexaSecretsFile) {
             prompt.say('\nPRÓXIMO PASSO (na publicação da skill):');
             prompt.say(`  Envie ${alexaSecretsFile}`);
@@ -261,4 +312,4 @@ async function runUninstall() {
     }
 }
 
-module.exports = { runInstall, runUninstall };
+module.exports = { runInstall, runUninstall, dataDirectoryAclCommands };

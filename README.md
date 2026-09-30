@@ -28,7 +28,8 @@ já na tela de login.
 
 ## Pré-requisitos
 
-- Windows 10/11 e Node.js 22+ (só para gerar o `.exe` e rodar os testes).
+- Windows 10/11 e Node.js 22+ **oficial** (nodejs.org). É usado para gerar o pacote, e o próprio `node.exe`
+  assinado vai dentro dele.
 - Conta gratuita no [HiveMQ Cloud](https://console.hivemq.cloud) com um cluster Serverless.
 - Skill Alexa-hosted criada no [developer console](https://developer.amazon.com/alexa/console/ask) (idioma pt-BR).
 
@@ -46,10 +47,20 @@ Guarde as senhas no seu gerenciador de senhas e anote o **Cluster URL** (aba Ove
 ## 2. Gerar e instalar o agente
 
 ```bash
-cd agent && npm install && npm run build:exe
+cd agent && npm install && npm run build:pacote
 ```
 
-Dê dois cliques em `agent\dist\o-monstro.exe`. O assistente pede permissão de administrador uma vez, pergunta o
+Isso gera a pasta `agent\dist\O Monstro\`:
+
+```
+O Monstro\
+  Instalar O Monstro.cmd      ← dois cliques aqui
+  app\node.exe                Node.js oficial, sem alteração (assinado pela OpenJS Foundation)
+  app\o-monstro.cjs           o agente
+  app\tray.ps1, app\actions.example.json
+```
+
+Dê dois cliques em **Instalar O Monstro.cmd**. O assistente pede permissão de administrador uma vez, pergunta o
 endereço do cluster, as duas credenciais (e testa a conexão) e o Skill ID, e então:
 
 - instala em `C:\Program Files\OMonstro\`;
@@ -57,13 +68,16 @@ endereço do cluster, as duas credenciais (e testa a conexão) e o Skill ID, e e
 - cria as tarefas agendadas **O Monstro\Nucleo** (inicia com o Windows) e **O Monstro\Area de trabalho** (inicia no logon);
 - gera `C:\ProgramData\OMonstro\enviar-para-alexa\secrets.json` para a skill.
 
-> O executável não tem assinatura digital. O Windows ou o antivírus podem avisar ou bloquear. Veja
-> [REVIEW.md](REVIEW.md) → Risco Alto para as opções.
+> **Antivírus:** o código do agente (conexão à internet + PowerShell + tarefas de inicialização) pode ser
+> marcado por heurística como suspeito (falso positivo, ex.: Kaspersky `HEUR:Trojan-Downloader.Script.Generic`).
+> Crie exclusões para a pasta do projeto e para `C:\Program Files\OMonstro\` (todos os componentes). Por isso o
+> agente não é distribuído como `.exe` único: um `node.exe` modificado perde a assinatura e é bloqueado mesmo
+> com exclusões.
 
 **Ícone na bandeja:** 🟢 pronto · 🟡 pausado · ⚪ sem conexão · 🔴 núcleo parado. Menu: Pausar/Retomar ações,
 Abrir log, Desligar o agente, Fechar ícone.
 
-**Desinstalar:** `"C:\Program Files\OMonstro\o-monstro.exe" --desinstalar`.
+**Desinstalar:** dois cliques em `C:\Program Files\OMonstro\Desinstalar O Monstro.cmd`.
 
 ## 3. Configurar a skill (publicação)
 

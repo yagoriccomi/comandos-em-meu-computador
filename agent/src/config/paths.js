@@ -11,7 +11,9 @@ module.exports = Object.freeze({
     APP_FOLDER,
     DATA_DIR,
     INSTALL_DIR,
-    INSTALLED_EXE: path.join(INSTALL_DIR, 'o-monstro.exe'),
+    INSTALLED_NODE: path.join(INSTALL_DIR, 'node.exe'),
+    INSTALLED_APP: path.join(INSTALL_DIR, 'o-monstro.cjs'),
+    UNINSTALL_SCRIPT: path.join(INSTALL_DIR, 'Desinstalar O Monstro.cmd'),
     CONFIG_FILE: path.join(DATA_DIR, 'config.json'),
     ACTIONS_FILE: path.join(DATA_DIR, 'actions.json'),
     STATE_FILE: path.join(DATA_DIR, 'state.json'),
@@ -19,5 +21,6 @@ module.exports = Object.freeze({
     TRAY_SCRIPT: path.join(INSTALL_DIR, 'tray.ps1'),
     LOG_DIR: path.join(DATA_DIR, 'logs'),
     ALEXA_EXPORT_DIR: path.join(DATA_DIR, 'enviar-para-alexa'),
-    PIPE_NAME: process.env.OMONSTRO_PIPE_NAME || '\\\\.\\pipe\\o-monstro',
+    // Porta (aleatória, só 127.0.0.1) onde o núcleo espera a sessão de desktop. Legível só por você e admins.
+    CORE_ENDPOINT_FILE: path.join(DATA_DIR, 'core-endpoint.json'),
 });

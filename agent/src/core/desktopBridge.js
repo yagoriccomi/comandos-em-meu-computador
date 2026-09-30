@@ -1,22 +1,24 @@
 'use strict';
 /*
- * Lado do NÚCLEO do named pipe. Aceita uma sessão de desktop autenticada por vez, repassa a ela as
- * ações que precisam de tela e recebe comandos do ícone (pausar, retomar, desligar).
+ * Lado do NÚCLEO do canal local (127.0.0.1). Aceita uma sessão de desktop autenticada por vez, repassa
+ * a ela as ações que precisam de tela e recebe comandos do ícone (pausar, retomar, desligar).
  */
 const net = require('net');
 const { MAX_SYNC_TIMEOUT_MS } = require('../config/localActions');
-const { HANDSHAKE_TIMEOUT_MS, PipeMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel } = require('../desktop/pipeChannel');
+const {
+    HANDSHAKE_TIMEOUT_MS, ChannelMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel, listenOnLoopback,
+} = require('../desktop/localChannel');
 
 /**
  * @param {object} deps
- * @param {string} deps.pipeName
- * @param {string} deps.pipeSecret
+ * @param {string} deps.endpointFile   onde a porta escolhida é publicada para a sessão de desktop
+ * @param {string} deps.pipeSecret     segredo do canal local (nome mantido: é a chave já gravada no config.json)
  * @param {object} deps.logger
  * @param {() => object} deps.getStatus         estado atual para enviar ao ícone
  * @param {(paused: boolean) => void} deps.onPauseChange
  * @param {() => void} deps.onShutdownRequested
  */
-function createDesktopBridge({ pipeName, pipeSecret, logger, getStatus, onPauseChange, onShutdownRequested, executeTimeoutMs = MAX_SYNC_TIMEOUT_MS }) {
+function createDesktopBridge({ endpointFile, pipeSecret, logger, getStatus, onPauseChange, onShutdownRequested, executeTimeoutMs = MAX_SYNC_TIMEOUT_MS }) {
     let session;
     let nextRequestId = 1;
     const pending = new Map();
@@ -27,19 +29,23 @@ function createDesktopBridge({ pipeName, pipeSecret, logger, getStatus, onPauseC
     }
 
     function handleSessionMessage(message) {
-        if (message.type === PipeMessage.RESULT && pending.has(message.id)) {
+        if (message.type === ChannelMessage.RESULT && pending.has(message.id)) {
             pending.get(message.id)({ ok: message.ok === true });
             pending.delete(message.id);
-        } else if (message.type === PipeMessage.PAUSE || message.type === PipeMessage.RESUME) {
-            onPauseChange(message.type === PipeMessage.PAUSE);
+        } else if (message.type === ChannelMessage.PAUSE || message.type === ChannelMessage.RESUME) {
+            onPauseChange(message.type === ChannelMessage.PAUSE);
             publishStatus();
-        } else if (message.type === PipeMessage.SHUTDOWN) {
+        } else if (message.type === ChannelMessage.SHUTDOWN) {
             logger.info({ event: 'shutdown_requested_by_user' });
             onShutdownRequested();
         }
     }
 
+    const openSockets = new Set();
+
     function onConnection(socket) {
+        openSockets.add(socket);
+        socket.on('close', () => openSockets.delete(socket));
         let authenticated = false;
         let serverNonce;
         const handshakeTimer = setTimeout(() => socket.destroy(), HANDSHAKE_TIMEOUT_MS);
@@ -49,21 +55,21 @@ function createDesktopBridge({ pipeName, pipeSecret, logger, getStatus, onPauseC
         };
         const channel = attachLineChannel(socket, (message) => {
             if (!authenticated && !serverNonce) {
-                if (message.type !== PipeMessage.HELLO || typeof message.nonce !== 'string') return rejectSession();
+                if (message.type !== ChannelMessage.HELLO || typeof message.nonce !== 'string') return rejectSession();
                 serverNonce = createNonce();
-                channel.send({ type: PipeMessage.CHALLENGE, nonce: serverNonce, proof: computeProof(pipeSecret, ProofRole.SERVER, message.nonce) });
+                channel.send({ type: ChannelMessage.CHALLENGE, nonce: serverNonce, proof: computeProof(pipeSecret, ProofRole.SERVER, message.nonce) });
                 return undefined;
             }
             if (!authenticated) {
-                if (message.type !== PipeMessage.AUTH || !proofMatches(pipeSecret, ProofRole.CLIENT, serverNonce, message.proof)) {
+                if (message.type !== ChannelMessage.AUTH || !proofMatches(pipeSecret, ProofRole.CLIENT, serverNonce, message.proof)) {
                     return rejectSession();
                 }
                 authenticated = true;
                 clearTimeout(handshakeTimer);
                 if (session) session.socket.destroy(); // a sessão mais recente substitui a anterior
                 session = { socket, channel };
-                channel.send({ type: PipeMessage.WELCOME });
-                channel.send({ type: PipeMessage.STATUS, ...getStatus() });
+                channel.send({ type: ChannelMessage.WELCOME });
+                channel.send({ type: ChannelMessage.STATUS, ...getStatus() });
                 logger.info({ event: 'desktop_session_connected' });
                 return undefined;
             }
@@ -82,19 +88,13 @@ function createDesktopBridge({ pipeName, pipeSecret, logger, getStatus, onPauseC
     const server = net.createServer(onConnection);
 
     function publishStatus() {
-        if (session) session.channel.send({ type: PipeMessage.STATUS, ...getStatus() });
+        if (session) session.channel.send({ type: ChannelMessage.STATUS, ...getStatus() });
     }
 
     return {
-        listen: () => new Promise((resolve, reject) => {
-            server.once('error', reject);
-            server.listen(pipeName, () => {
-                server.off('error', reject);
-                resolve();
-            });
-        }),
+        listen: () => listenOnLoopback(server, endpointFile),
         close: () => new Promise((resolve) => {
-            if (session) session.socket.destroy();
+            for (const socket of openSockets) socket.destroy(); // inclui conexões ainda não autenticadas
             server.close(() => resolve());
         }),
         publishStatus,
@@ -112,7 +112,7 @@ function createDesktopBridge({ pipeName, pipeSecret, logger, getStatus, onPauseC
                     clearTimeout(timer);
                     resolve(result);
                 });
-                session.channel.send({ type: PipeMessage.EXECUTE, id, actionId, params });
+                session.channel.send({ type: ChannelMessage.EXECUTE, id, actionId, params });
             });
         },
     };

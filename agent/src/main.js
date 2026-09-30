@@ -1,6 +1,6 @@
 'use strict';
 /*
- * o-monstro.exe
+ * node.exe o-monstro.cjs   (instalado em C:\Program Files\OMonstro, com o Node.js oficial assinado)
  *   (sem argumentos) | --instalar   assistente de instalação
  *   --nucleo                        núcleo (tarefa agendada na inicialização do Windows)
  *   --desktop                       ícone na bandeja + ações de tela (tarefa agendada no logon)
@@ -21,7 +21,7 @@ const { createDesktopBridge } = require('./core/desktopBridge');
 const { createAgentCore } = require('./core/agentCore');
 const { createDesktopSession, createStatusFileWriter } = require('./desktop/desktopSession');
 const { startTray } = require('./desktop/trayController');
-const { isPackagedExe, DEV_ASSET_PATHS } = require('./assets');
+const { isPackagedInstall, DEV_ASSET_PATHS } = require('./assets');
 
 const VERSION = '1.0.0';
 const EXIT_FAILURE = 1;
@@ -59,7 +59,7 @@ async function runCore() {
     let transport;
 
     const bridge = createDesktopBridge({
-        pipeName: paths.PIPE_NAME,
+        endpointFile: paths.CORE_ENDPOINT_FILE,
         pipeSecret: config.pipeSecret,
         logger,
         getStatus: () => ({ broker: brokerStatus, paused: pauseState.isPaused() }),
@@ -102,7 +102,7 @@ function runDesktop() {
     installGlobalErrorHandlers(logger);
     const { config, localActions } = loadRuntimeConfig(logger);
     const session = createDesktopSession({
-        pipeName: paths.PIPE_NAME,
+        endpointFile: paths.CORE_ENDPOINT_FILE,
         pipeSecret: config.pipeSecret,
         localActions,
         executor: createActionExecutor({ logger }),
@@ -111,7 +111,7 @@ function runDesktop() {
     });
     session.start();
     startTray({
-        trayScript: isPackagedExe() ? paths.TRAY_SCRIPT : DEV_ASSET_PATHS['tray.ps1'],
+        trayScript: isPackagedInstall() ? paths.TRAY_SCRIPT : DEV_ASSET_PATHS['tray.ps1'],
         statusFile: paths.STATUS_FILE,
         logFile: path.join(paths.LOG_DIR, 'agent.log'),
         session,
@@ -138,7 +138,7 @@ async function main(argv) {
         case '--instalar':
             return require('./install/installer').runInstall(argv);
         default:
-            console.error('Uso: o-monstro.exe [--instalar | --desinstalar | --versao]');
+            console.error('Uso: node.exe o-monstro.cjs [--instalar | --desinstalar | --versao]');
             process.exitCode = EXIT_FAILURE;
             return undefined;
     }
@@ -148,7 +148,10 @@ async function main(argv) {
 function waitForEnter() {
     if (!process.stdin.isTTY) return Promise.resolve();
     process.stdout.write('Pressione Enter para fechar');
-    return new Promise((resolve) => process.stdin.once('data', resolve));
+    return new Promise((resolve) => {
+        process.stdin.once('data', resolve);
+        process.stdin.resume(); // o readline das perguntas deixa o stdin pausado; sem isso a janela fechava
+    });
 }
 
 main(process.argv.slice(2)).catch(async (error) => {
