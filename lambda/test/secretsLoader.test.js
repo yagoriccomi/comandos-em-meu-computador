@@ -72,3 +72,31 @@ test('shouldAcceptOptionalUserHashAllowList', () => {
     assert.deepEqual([...secrets.allowedUserIdHashes], ['a'.repeat(64)]);
     assertSecretsError('invalid_user_hashes', () => validateSecrets({ ...VALID_SECRETS, allowedUserIdHashes: ['amzn1.ask.account.X'] }));
 });
+
+test('shouldReadSecretsWithRuntimeAwsSdkV2WhenAvailable', async () => {
+    const { createS3ObjectReader } = require('../config/secretsLoader');
+    const calls = [];
+    const fakeV2 = {
+        S3: function S3(options) {
+            calls.push({ options });
+            this.getObject = (params) => ({ promise: async () => { calls.push({ params }); return { Body: Buffer.from('{"ok":true}') }; } });
+        },
+    };
+    const readObject = createS3ObjectReader({ region: 'us-east-1', requireModule: (name) => {
+        if (name === 'aws-sdk') return fakeV2;
+        throw new Error('não deveria carregar ' + name);
+    } });
+    assert.equal(await readObject('bucket', 'config/secrets.json'), '{"ok":true}');
+    assert.deepEqual(calls[1].params, { Bucket: 'bucket', Key: 'config/secrets.json' });
+});
+
+test('shouldFallBackToRuntimeAwsSdkV3WhenV2IsAbsent', async () => {
+    const { createS3ObjectReader } = require('../config/secretsLoader');
+    function GetObjectCommand(input) { this.input = input; }
+    function S3Client() { this.send = async (command) => ({ Body: { transformToString: async () => JSON.stringify(command.input) } }); }
+    const readObject = createS3ObjectReader({ region: 'us-east-1', requireModule: (name) => {
+        if (name === 'aws-sdk') throw Object.assign(new Error('ausente'), { code: 'MODULE_NOT_FOUND' });
+        return { S3Client, GetObjectCommand };
+    } });
+    assert.equal(await readObject('b', 'k'), '{"Bucket":"b","Key":"k"}');
+});

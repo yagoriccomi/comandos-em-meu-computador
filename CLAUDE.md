@@ -6,7 +6,9 @@ Um usuário, uma máquina. Plano de referência: `docs/planos/PLANO-alexa-agente
 ## Arquitetura
 
 ```
-lambda/        Skill Alexa-hosted (Node, CommonJS, compatível com Node 18)
+lambda/        Skill Alexa-hosted (Node 16, CommonJS). O builder usa yarn 1.7 com checagem RÍGIDA de engines:
+               toda dependência precisa aceitar Node 16 (yarn.lock versionado). NÃO declarar o SDK da AWS:
+               o runtime já traz (v2 no Node 16, v3 no 18+) — ver config/secretsLoader.js
   handlers/    Intents (canHandle/handle do ASK SDK) — sem regra de negócio
   domain/      catálogo público, slot → actionId, validação de params
   messaging/   envia cmd e espera ack pelo broker MQTT
