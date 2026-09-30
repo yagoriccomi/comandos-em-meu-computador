@@ -9,7 +9,8 @@ module.exports = Object.freeze({
     UNKNOWN_ACTION: 'Não conheço essa ação.',
     CANCELLED_BY_USER: 'Tudo bem, não fiz nada.',
     GOODBYE: 'Até mais.',
-    askForParam: (param) => `Em quantos ${param.name} você quer?`,
+    CONFIRMATION_EXPIRED: 'Demorou demais para confirmar. Peça de novo, por favor.',
+    askForParam: (param) => `Em quantos ${param.name}? Diga, por exemplo: 30 ${param.name}.`,
     invalidParam: (param) => `O valor precisa ser de ${param.min} a ${param.max} ${param.name}.`,
     confirmAction: (action, params) => {
         const details = Object.entries(params).map(([name, value]) => ` em ${value} ${name}`).join('');

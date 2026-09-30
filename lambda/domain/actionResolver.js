@@ -60,9 +60,31 @@ function resolveIntent(intent, catalog) {
     return resolveParams(action, intent);
 }
 
+/**
+ * Revalida uma ação guardada na sessão à espera de confirmação: o id precisa existir no catálogo e exigir
+ * confirmação, e os parâmetros precisam ser exatamente os declarados, inteiros e dentro da faixa.
+ */
+function resolvePendingAction(pending, catalog) {
+    const action = pending && catalog.findById(pending.actionId);
+    if (!action || !action.requiresConfirmation) return { ok: false, reason: ResolutionFailure.UNKNOWN_ACTION };
+    const params = pending.params && typeof pending.params === 'object' ? pending.params : {};
+    const declaredNames = action.params.map((param) => param.name).sort();
+    if (JSON.stringify(Object.keys(params).sort()) !== JSON.stringify(declaredNames)) {
+        return { ok: false, reason: ResolutionFailure.INVALID_PARAM, action };
+    }
+    for (const param of action.params) {
+        const value = params[param.name];
+        if (!Number.isSafeInteger(value) || value < param.min || value > param.max) {
+            return { ok: false, reason: ResolutionFailure.INVALID_PARAM, action, param };
+        }
+    }
+    return { ok: true, action, params: { ...params } };
+}
+
 module.exports = {
     ResolutionFailure,
     SLOT_INTENTS,
     resolveIntent,
+    resolvePendingAction,
     isActionIntent: (intentName) => Boolean(SLOT_INTENTS[intentName]),
 };

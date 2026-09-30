@@ -16,17 +16,22 @@ const SECRETS = Object.freeze({
     allowedUserIdHashes: [],
 });
 
-function envelope(request, { skillId = SKILL_ID } = {}) {
+function envelope(request, { skillId = SKILL_ID, attributes, isNewSession = true } = {}) {
     return {
         version: '1.0',
-        session: { new: true, sessionId: 'sessao', application: { applicationId: skillId }, user: { userId: USER_ID } },
+        session: { new: isNewSession, sessionId: 'sessao', application: { applicationId: skillId }, user: { userId: USER_ID }, attributes },
         context: { System: { application: { applicationId: skillId }, user: { userId: USER_ID }, device: { deviceId: 'eco' } } },
         request: { requestId: 'req', timestamp: new Date().toISOString(), locale: 'pt-BR', ...request },
     };
 }
 
-function intentRequest(name, slots = {}, confirmationStatus = 'NONE') {
-    return envelope({ type: 'IntentRequest', dialogState: 'STARTED', intent: { name, confirmationStatus, slots } });
+function intentRequest(name, slots = {}, options = {}) {
+    return envelope({ type: 'IntentRequest', dialogState: 'STARTED', intent: { name, confirmationStatus: 'NONE', slots } }, options);
+}
+
+/** Resposta do usuário no turno seguinte, levando os atributos de sessão devolvidos pela skill (como a Alexa faz). */
+function followUp(previousResponse, intentName, slots = {}) {
+    return intentRequest(intentName, slots, { attributes: previousResponse.sessionAttributes, isNewSession: false });
 }
 
 function matchedSlot(name, value, id) {
@@ -84,38 +89,79 @@ test('shouldSayUnknownAndSendNothingForUnmatchedSlot', async () => {
     assert.equal(broker.published.length, 0);
 });
 
-test('shouldAskConfirmationBeforeSensitiveAction', async () => {
+const SHUTDOWN_30 = { minutos: { name: 'minutos', value: '30' } };
+
+test('shouldAskConfirmationAndKeepSessionOpenBeforeSensitiveAction', async () => {
     const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
-    const response = await skill.invoke(intentRequest('DesligarEmMinutosIntent', { minutos: { name: 'minutos', value: '30' } }));
+    const response = await skill.invoke(intentRequest('DesligarEmMinutosIntent', SHUTDOWN_30));
     assert.equal(speechOf(response), 'Você confirma desligar o computador em 30 minutos?');
-    assert.equal(response.response.directives[0].type, 'Dialog.ConfirmIntent');
+    assert.equal(response.response.shouldEndSession, false, 'o microfone precisa ficar aberto para ouvir o "sim"');
+    assert.equal(response.response.directives, undefined, 'sem Dialog.ConfirmIntent (exige modelo de diálogo)');
+    assert.deepEqual(response.sessionAttributes.pendingAction.params, { minutos: 30 });
     assert.equal(broker.published.length, 0);
 });
 
-test('shouldExecuteSensitiveActionAfterConfirmation', async () => {
+test('shouldExecuteSensitiveActionWhenUserSaysYes', async () => {
     const { skill, executed } = await buildSkill({ agentStatus: 'ok' });
-    const response = await skill.invoke(intentRequest('DesligarEmMinutosIntent', { minutos: { name: 'minutos', value: '30' } }, 'CONFIRMED'));
-    assert.equal(speechOf(response), 'Feito.');
+    const question = await skill.invoke(intentRequest('DesligarEmMinutosIntent', SHUTDOWN_30));
+    const answer = await skill.invoke(followUp(question, 'AMAZON.YesIntent'));
+    assert.equal(speechOf(answer), 'Feito.');
     assert.deepEqual(executed, [{ actionId: 'desligar_em_minutos', params: { minutos: 30 } }]);
+    assert.equal(answer.sessionAttributes.pendingAction, undefined, 'confirmação é consumida');
 });
 
-test('shouldDoNothingWhenUserDeniesConfirmation', async () => {
+test('shouldDoNothingWhenUserSaysNo', async () => {
     const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
-    const response = await skill.invoke(intentRequest('ExecutarRotinaIntent', matchedSlot('rotina', 'reiniciar', 'reiniciar_pc'), 'DENIED'));
-    assert.equal(speechOf(response), 'Tudo bem, não fiz nada.');
+    const question = await skill.invoke(intentRequest('ExecutarRotinaIntent', matchedSlot('rotina', 'reiniciar', 'reiniciar_pc')));
+    const answer = await skill.invoke(followUp(question, 'AMAZON.NoIntent'));
+    assert.equal(speechOf(answer), 'Tudo bem, não fiz nada.');
     assert.equal(broker.published.length, 0);
 });
 
-test('shouldAskForMinutesWhenMissing', async () => {
-    const { skill } = await buildSkill({ agentStatus: 'ok' });
-    const response = await skill.invoke(intentRequest('DesligarEmMinutosIntent', { minutos: { name: 'minutos' } }));
-    assert.equal(response.response.directives[0].type, 'Dialog.ElicitSlot');
-    assert.equal(response.response.directives[0].slotToElicit, 'minutos');
+test('shouldNotExecuteWhenYesArrivesWithoutPendingAction', async () => {
+    const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
+    const response = await skill.invoke(intentRequest('AMAZON.YesIntent'));
+    assert.equal(speechOf(response), 'Não conheço essa ação.');
+    assert.equal(broker.published.length, 0);
+});
+
+test('shouldRefuseExpiredConfirmation', async () => {
+    const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
+    const expired = { pendingAction: { actionId: 'reiniciar_pc', params: {}, expiresAt: Date.now() - 1 } };
+    const response = await skill.invoke(intentRequest('AMAZON.YesIntent', {}, { attributes: expired, isNewSession: false }));
+    assert.equal(speechOf(response), 'Demorou demais para confirmar. Peça de novo, por favor.');
+    assert.equal(broker.published.length, 0);
+});
+
+test('shouldRevalidateTamperedPendingActionBeforeSending', async () => {
+    const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
+    const future = Date.now() + 60000;
+    for (const pendingAction of [
+        { actionId: 'formatar_disco', params: {}, expiresAt: future },
+        { actionId: 'abrir_netflix', params: {}, expiresAt: future },
+        { actionId: 'desligar_em_minutos', params: { minutos: 999 }, expiresAt: future },
+        { actionId: 'desligar_em_minutos', params: { minutos: '30; shutdown /r' }, expiresAt: future },
+        { actionId: 'desligar_em_minutos', params: { minutos: 30, extra: 1 }, expiresAt: future },
+    ]) {
+        await skill.invoke(intentRequest('AMAZON.YesIntent', {}, { attributes: { pendingAction }, isNewSession: false }));
+    }
+    assert.equal(broker.published.length, 0);
+});
+
+test('shouldAskForMinutesKeepingSessionOpenAndAcceptSpokenAnswer', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: 'ok' });
+    const question = await skill.invoke(intentRequest('DesligarEmMinutosIntent', { minutos: { name: 'minutos' } }));
+    assert.equal(speechOf(question), 'Em quantos minutos? Diga, por exemplo: 30 minutos.');
+    assert.equal(question.response.shouldEndSession, false);
+    const confirmation = await skill.invoke(followUp(question, 'DesligarEmMinutosIntent', { minutos: { name: 'minutos', value: '15' } }));
+    assert.equal(speechOf(confirmation), 'Você confirma desligar o computador em 15 minutos?');
+    await skill.invoke(followUp(confirmation, 'AMAZON.YesIntent'));
+    assert.deepEqual(executed, [{ actionId: 'desligar_em_minutos', params: { minutos: 15 } }]);
 });
 
 test('shouldRefuseMinutesOutOfRange', async () => {
     const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
-    const response = await skill.invoke(intentRequest('DesligarEmMinutosIntent', { minutos: { name: 'minutos', value: '500' } }, 'CONFIRMED'));
+    const response = await skill.invoke(intentRequest('DesligarEmMinutosIntent', { minutos: { name: 'minutos', value: '500' } }));
     assert.equal(speechOf(response), 'O valor precisa ser de 1 a 240 minutos.');
     assert.equal(broker.published.length, 0);
 });
