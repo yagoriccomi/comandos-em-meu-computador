@@ -4,7 +4,7 @@ const Alexa = require('ask-sdk-core');
 const { catalog } = require('./domain/catalog');
 const { createSecretsLoader, createS3ObjectReader } = require('./config/secretsLoader');
 const { connectMqttTransport } = require('./messaging/mqttTransport');
-const { createActionHandler } = require('./handlers/actionHandler');
+const { createActionHandlers } = require('./handlers/actionHandler');
 const builtIn = require('./handlers/builtInHandlers');
 
 const USER_AGENT = 'o-monstro/1.0';
@@ -19,7 +19,7 @@ function createSkill({ loadSecrets, connectTransport, log = logger }) {
     return Alexa.SkillBuilders.custom()
         .addRequestHandlers(
             builtIn.LaunchRequestHandler,
-            createActionHandler({ catalog, loadSecrets, connectTransport, logger: log }),
+            ...createActionHandlers({ catalog, loadSecrets, connectTransport, logger: log }),
             builtIn.HelpIntentHandler,
             builtIn.CancelAndStopIntentHandler,
             builtIn.SessionEndedRequestHandler,

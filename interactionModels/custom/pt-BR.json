@@ -24,6 +24,14 @@
           "samples": []
         },
         {
+          "name": "AMAZON.NoIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
           "name": "AbrirAplicativoIntent",
           "slots": [
             {
@@ -74,7 +82,10 @@
             "desligar daqui a {minutos} minutos",
             "desligar o computador daqui a {minutos} minutos",
             "desligar o computador",
-            "desligar o pc"
+            "desligar o pc",
+            "{minutos} minutos",
+            "em {minutos} minutos",
+            "daqui a {minutos} minutos"
           ]
         }
       ],

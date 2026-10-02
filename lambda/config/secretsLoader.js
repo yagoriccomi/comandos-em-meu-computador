@@ -69,9 +69,29 @@ function createSecretsLoader({ readObject, bucket }) {
     };
 }
 
-function createS3ObjectReader() {
-    const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-    const client = new S3Client({ region: process.env.S3_PERSISTENCE_REGION });
+function isModuleNotFound(error) {
+    return Boolean(error) && error.code === 'MODULE_NOT_FOUND';
+}
+
+/**
+ * Usa o SDK da AWS que o PRÓPRIO runtime da Lambda traz, sem declará-lo no package.json:
+ * - Node 16 (Alexa-hosted hoje): aws-sdk v2 embutido;
+ * - Node 18+: @aws-sdk/client-s3 (v3) embutido.
+ * Declarar o v3 como dependência quebrava o deploy: o builder (yarn 1, Node 16) recusa pacotes que exigem Node 20.
+ */
+function createS3ObjectReader({ requireModule = require, region = process.env.S3_PERSISTENCE_REGION } = {}) {
+    try {
+        const AWS = requireModule('aws-sdk');
+        const client = new AWS.S3({ region, signatureVersion: 'v4' });
+        return async function readObject(bucket, key) {
+            const response = await client.getObject({ Bucket: bucket, Key: key }).promise();
+            return response.Body.toString('utf8');
+        };
+    } catch (error) {
+        if (!isModuleNotFound(error)) throw error;
+    }
+    const { S3Client, GetObjectCommand } = requireModule('@aws-sdk/client-s3');
+    const client = new S3Client({ region });
     return async function readObject(bucket, key) {
         const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
         return response.Body.transformToString('utf8');
