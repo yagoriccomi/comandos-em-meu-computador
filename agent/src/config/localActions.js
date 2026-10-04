@@ -3,10 +3,14 @@
  * Parte LOCAL do catálogo (actions.json): o que cada id do catálogo público executa neste PC.
  * Regras (ver CLAUDE.md): executável absoluto, argumentos fixos, sem shell; o único dado variável
  * permitido é um placeholder que ocupa um argumento inteiro ("{minutos}" ou "{minutos*60}") e que
- * corresponde a um parâmetro declarado e validado no catálogo público.
+ * corresponde a um parâmetro INTEIRO declarado e validado no catálogo público.
+ *
+ * Ações internas ({"id": …, "interno": true, "enabled": true}) são executadas por código fixo do agente
+ * (teclas de mídia, programas da lista privada, pesquisa). O actions.json só liga ou desliga cada uma.
  */
 const fs = require('fs');
 const path = require('path');
+const { INTERNAL_ACTION_IDS } = require('../internal/internalActionIds');
 
 const MAX_SYNC_TIMEOUT_MS = 3500; // precisa responder antes de a skill desistir do ack (4,5 s)
 const DEFAULT_TIMEOUT_MS = 3000;
@@ -33,8 +37,13 @@ function parseArg(actionId, arg, publicAction) {
         return Object.freeze({ literal: arg });
     }
     const [, paramName, multiplier] = match;
-    if (!publicAction.params.some((param) => param.name === paramName)) {
+    const param = publicAction.params.find((candidate) => candidate.name === paramName);
+    if (!param) {
         throw new LocalActionsError(`${actionId}: parâmetro {${paramName}} não existe no catálogo público`);
+    }
+    if (param.type !== 'integer') {
+        // Texto, duração e programa só são usados por ações internas, nunca como argumento de executável.
+        throw new LocalActionsError(`${actionId}: {${paramName}} não é inteiro e não pode ir para argumentos`);
     }
     return Object.freeze({ paramName, multiplier: multiplier ? Number(multiplier) : 1 });
 }
@@ -43,6 +52,13 @@ function validateEntry(entry, publicAction, { checkFileExists }) {
     const id = entry.id;
     if (typeof entry.enabled !== 'boolean') throw new LocalActionsError(`${id}: "enabled" obrigatório`);
     if (!entry.enabled) return Object.freeze({ id, enabled: false, publicAction });
+    if (entry.interno !== undefined) {
+        if (entry.interno !== true || !INTERNAL_ACTION_IDS.includes(id)) {
+            throw new LocalActionsError(`${id}: só ações internas conhecidas aceitam "interno": true`);
+        }
+        return Object.freeze({ id, enabled: true, internal: true, publicAction });
+    }
+    if (INTERNAL_ACTION_IDS.includes(id)) throw new LocalActionsError(`${id}: é uma ação interna (use "interno": true)`);
 
     const executable = entry.executable;
     if (typeof executable !== 'string' || !path.win32.isAbsolute(executable)) {

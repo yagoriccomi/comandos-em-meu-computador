@@ -2,8 +2,10 @@
 /*
  * Executa uma ação local validada. SEMPRE execFile/spawn com shell: false.
  * O único valor externo que chega aos argumentos é um inteiro já validado contra o catálogo público.
+ * Ações internas vão para o `internalRunner` (código fixo do agente), com os parâmetros já validados.
  */
 const childProcess = require('child_process');
+const { hasValidParams } = require('./paramValidation');
 
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const LOGGED_OUTPUT_CHARS = 2000;
@@ -16,20 +18,8 @@ class ExecutionError extends Error {
     }
 }
 
-function validateParams(publicAction, params) {
-    const declared = publicAction.params;
-    const received = params && typeof params === 'object' ? Object.keys(params) : [];
-    if (received.length !== declared.length) throw new ExecutionError('invalid_params');
-    for (const param of declared) {
-        const value = params[param.name];
-        if (!Number.isSafeInteger(value) || value < param.min || value > param.max) {
-            throw new ExecutionError('invalid_params');
-        }
-    }
-}
-
 function buildArgs(localAction, params) {
-    validateParams(localAction.publicAction, params);
+    if (!hasValidParams(localAction.publicAction, params)) throw new ExecutionError('invalid_params');
     return localAction.args.map((arg) => (arg.paramName ? String(params[arg.paramName] * arg.multiplier) : arg.literal));
 }
 
@@ -38,7 +28,11 @@ function truncate(text) {
     return value.length > LOGGED_OUTPUT_CHARS ? `${value.slice(0, LOGGED_OUTPUT_CHARS)}…` : value;
 }
 
-function createActionExecutor({ execFile = childProcess.execFile, spawn = childProcess.spawn, logger }) {
+/**
+ * @param {object} deps
+ * @param {{ run: (actionId: string, params: object) => Promise<{ ok: boolean }> }} [deps.internalRunner]
+ */
+function createActionExecutor({ execFile = childProcess.execFile, spawn = childProcess.spawn, logger, internalRunner }) {
     function runAndWait(localAction, args) {
         return new Promise((resolve) => {
             execFile(localAction.executable, args, {
@@ -83,6 +77,18 @@ function createActionExecutor({ execFile = childProcess.execFile, spawn = childP
         if (!localAction || !localAction.enabled) {
             logger.warn({ event: 'action_refused', actionId: localAction && localAction.id, reason: 'action_disabled' });
             return { ok: false };
+        }
+        if (localAction.internal) {
+            if (!internalRunner || !hasValidParams(localAction.publicAction, params)) {
+                logger.warn({ event: 'action_refused', actionId: localAction.id, reason: internalRunner ? 'invalid_params' : 'internal_unavailable' });
+                return { ok: false };
+            }
+            try {
+                return await internalRunner.run(localAction.id, params);
+            } catch (error) {
+                logger.warn({ event: 'internal_action_failed', actionId: localAction.id, errorName: error.name, errorCode: error.code });
+                return { ok: false };
+            }
         }
         let args;
         try {
