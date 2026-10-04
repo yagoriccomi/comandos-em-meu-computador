@@ -26,9 +26,11 @@ $shortcuts = @{}
 foreach ($folder in $StartMenuFolders) {
     if (-not (Test-Path -LiteralPath $folder)) { continue }
     foreach ($file in Get-ChildItem -LiteralPath $folder -Recurse -Filter *.lnk -ErrorAction SilentlyContinue) {
-        if ($shortcuts.ContainsKey($file.BaseName)) { continue }
         try {
             $link = $shell.CreateShortcut($file.FullName)
+            $existing = $shortcuts[$file.BaseName]
+            # Dois atalhos com o mesmo nome: vale o que tem argumentos (ex.: Discord com --processStart).
+            if ($null -ne $existing -and ($existing.Arguments -or -not $link.Arguments)) { continue }
             $shortcuts[$file.BaseName] = @{ Target = [string]$link.TargetPath; Arguments = [string]$link.Arguments }
         } catch { }
     }

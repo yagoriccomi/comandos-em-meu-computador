@@ -8,7 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const paths = require('../config/paths');
 const { validateAgentConfig, loadAgentConfig } = require('../config/agentConfig');
-const { PACKAGED_FILES, currentAppFile, isPackagedInstall, packageDirectory, readAsset } = require('../assets');
+const { PACKAGED_FILES, POWERSHELL_ASSETS, currentAppFile, isPackagedInstall, packageDirectory, readAsset } = require('../assets');
+const { INTERNAL_ACTION_IDS } = require('../internal/internalActionIds');
 const { createConsolePrompt } = require('./consolePrompt');
 const { normalizeBrokerUrl, isValidSkillId, generateIdentity, buildConfigFiles } = require('./secretsFactory');
 const tasks = require('./windowsTasks');
@@ -189,6 +190,28 @@ function readExistingConfig() {
     }
 }
 
+/**
+ * Reinstalação: acrescenta ao actions.json do dono as ações internas novas (ligadas), sem mexer nas dele.
+ * @returns {string[]} ids acrescentados
+ */
+function mergeInternalActions(source) {
+    const actions = Array.isArray(source.actions) ? source.actions : [];
+    const known = new Set(actions.map((action) => action && action.id));
+    const added = INTERNAL_ACTION_IDS.filter((id) => !known.has(id));
+    return { content: { ...source, actions: [...actions, ...added.map((id) => ({ id, interno: true, enabled: true }))] }, added };
+}
+
+function addMissingInternalActions(filePath) {
+    let source;
+    try {
+        source = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, ''));
+    } catch (error) {
+        return; // arquivo inválido: o agente avisa no log; não sobrescrevemos o que o dono escreveu
+    }
+    const { content, added } = mergeInternalActions(source);
+    if (added.length) fs.writeFileSync(filePath, `${JSON.stringify(content, null, 4)}\n`);
+}
+
 function installProgramFiles() {
     fs.mkdirSync(paths.INSTALL_DIR, { recursive: true });
     const sourceDir = path.resolve(packageDirectory()).toLowerCase();
@@ -197,8 +220,10 @@ function installProgramFiles() {
             fs.copyFileSync(path.join(packageDirectory(), fileName), path.join(paths.INSTALL_DIR, fileName));
         }
     }
-    const tray = readAsset('tray.ps1');
-    fs.writeFileSync(paths.TRAY_SCRIPT, tray.startsWith(UTF8_BOM) ? tray : `${UTF8_BOM}${tray}`); // PowerShell 5.1 precisa do BOM
+    for (const script of POWERSHELL_ASSETS) {
+        const content = readAsset(script);
+        fs.writeFileSync(path.join(paths.INSTALL_DIR, script), content.startsWith(UTF8_BOM) ? content : `${UTF8_BOM}${content}`); // PowerShell 5.1 precisa do BOM
+    }
     fs.writeFileSync(paths.UNINSTALL_SCRIPT, UNINSTALL_SCRIPT_CONTENT);
 }
 
@@ -239,6 +264,7 @@ async function runInstall(argv) {
             writeJson(alexaSecretsFile, alexaSecrets);
         }
         if (!fs.existsSync(paths.ACTIONS_FILE)) fs.writeFileSync(paths.ACTIONS_FILE, readAsset('actions.example.json'));
+        else addMissingInternalActions(paths.ACTIONS_FILE);
 
         prompt.say('\nCopiando o programa para Arquivos de Programas…');
         installProgramFiles();
@@ -312,4 +338,4 @@ async function runUninstall() {
     }
 }
 
-module.exports = { runInstall, runUninstall, dataDirectoryAclCommands };
+module.exports = { runInstall, runUninstall, dataDirectoryAclCommands, mergeInternalActions };

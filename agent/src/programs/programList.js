@@ -37,9 +37,13 @@ const SUGGESTED_ALIASES = Object.freeze({
     'explorador de arquivos': ['explorer', 'meus arquivos'],
 });
 
-/** Programas do sistema sem pasta detectável: processos conhecidos. */
-const SYSTEM_PROCESSES = Object.freeze({
+/**
+ * Processos que a detecção não acha sozinha. Claude: o Claude Code roda em %APPDATA%\Claude\claude-code\<versão>
+ * (o Cowork é um SERVIÇO do Windows e precisa de administrador; não entra aqui).
+ */
+const KNOWN_EXTRA_PROCESSES = Object.freeze({
     'gerenciador de tarefas': [{ folder: path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'), exe: 'Taskmgr.exe' }],
+    claude: [{ folder: path.join(process.env.APPDATA || 'C:\\Users\\Default\\AppData\\Roaming', 'Claude'), exe: 'claude.exe' }],
 });
 
 /** Entradas que quase ninguém quer abrir por voz começam desligadas (desinstaladores, manuais…). */
@@ -153,7 +157,7 @@ function fromDetected(detected) {
         aliases: [...(SUGGESTED_ALIASES[key] || [])],
         disabledVerbs: [],
         appId: detected.appId,
-        processes: uniqueProcesses([...scannedProcesses, ...(SYSTEM_PROCESSES[key] || [])]),
+        processes: uniqueProcesses([...scannedProcesses, ...(KNOWN_EXTRA_PROCESSES[key] || [])]),
         manual: false,
     };
 }

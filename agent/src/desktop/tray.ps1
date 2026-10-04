@@ -1,13 +1,16 @@
-﻿param(
+param(
     [Parameter(Mandatory = $true)][string]$StatusFile,
     [Parameter(Mandatory = $true)][int]$ParentPid
 )
 # Icone da bandeja do O Monstro.
 # So LE o arquivo de status escrito pela sessao de desktop e ESCREVE comandos fixos no stdout
-# (pause | resume | openlog | shutdown | quit). Nenhum texto externo e executado aqui.
+# (pause | resume | openlog | shutdown | quit | programs_refresh | programs_edit | routines | deploy | rename <nome>).
+# Nenhum texto externo e executado aqui; o nome digitado em "Trocar nome" e validado pelo agente.
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName Microsoft.VisualBasic
 
 # ---- Tokens de tema (barra de tarefas clara / escura) ----
 $Palette = @{
@@ -63,7 +66,7 @@ function Send-Command([string]$Name) {
 }
 
 function Show-Notice([string]$Text) {
-    $notifyIcon.ShowBalloonTip($BalloonTimeoutMs, $AppName, $Text, [System.Windows.Forms.ToolTipIcon]::Warning)
+    $notifyIcon.ShowBalloonTip($BalloonTimeoutMs, $AppName, $Text, [System.Windows.Forms.ToolTipIcon]::Info)
 }
 
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
@@ -74,6 +77,14 @@ $headerItem.Enabled = $false
 $pauseItem = $menu.Items.Add('Pausar ações')
 $logItem = $menu.Items.Add('Abrir log')
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+$programsMenu = New-Object System.Windows.Forms.ToolStripMenuItem 'Programas'
+$refreshItem = $programsMenu.DropDownItems.Add('Atualizar lista de programas')
+$editItem = $programsMenu.DropDownItems.Add('Editar lista de programas')
+$routinesItem = $programsMenu.DropDownItems.Add('Gerar rotinas sugeridas do app Alexa')
+[void]$menu.Items.Add($programsMenu)
+$renameItem = $menu.Items.Add('Trocar nome de chamada…')
+$deployItem = $menu.Items.Add('Publicar atualização…')
+[void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 $shutdownItem = $menu.Items.Add('Desligar o agente…')
 $quitItem = $menu.Items.Add('Fechar ícone')
 
@@ -81,6 +92,22 @@ $pauseItem.add_Click({
     if ($script:State -eq 'paused') { Send-Command 'resume' } else { Send-Command 'pause' }
 })
 $logItem.add_Click({ Send-Command 'openlog' })
+$refreshItem.add_Click({ Send-Command 'programs_refresh' })
+$editItem.add_Click({ Send-Command 'programs_edit' })
+$routinesItem.add_Click({ Send-Command 'routines' })
+$renameItem.add_Click({
+    $name = [Microsoft.VisualBasic.Interaction]::InputBox(
+        "Como a Alexa deve chamar este PC? Com artigo, só letras.`nExemplos: o monstro, a morgana.`n`nO novo nome vale depois de 'Publicar atualização'.",
+        $AppName, '')
+    $clean = ($name -replace '[\r\n]', ' ').Trim()
+    if ($clean) { Send-Command "rename $clean" }
+})
+$deployItem.add_Click({
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+        'Publicar a skill na Amazon e gerar o instalador do agente? Uma janela vai mostrar o andamento.',
+        $AppName, [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { Send-Command 'deploy' }
+})
 $shutdownItem.add_Click({
     $answer = [System.Windows.Forms.MessageBox]::Show(
         'Desligar o agente? A Alexa não conseguirá executar ações até o próximo reinício do Windows.',

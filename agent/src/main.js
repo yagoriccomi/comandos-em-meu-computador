@@ -20,10 +20,16 @@ const { createPauseState } = require('./core/pauseState');
 const { createDesktopBridge } = require('./core/desktopBridge');
 const { createAgentCore } = require('./core/agentCore');
 const { createDesktopSession, createStatusFileWriter } = require('./desktop/desktopSession');
-const { startTray } = require('./desktop/trayController');
-const { isPackagedInstall, DEV_ASSET_PATHS } = require('./assets');
+const fs = require('fs');
+const childProcess = require('child_process');
+const { startTray, TrayCommand, POWERSHELL_EXE, NOTEPAD_EXE } = require('./desktop/trayController');
+const { createInputHelper } = require('./desktop/inputHelper');
+const { createInternalRunner } = require('./internal/internalActions');
+const { createLauncher } = require('./internal/launcher');
+const { createProgramsManager } = require('./programs/programsManager');
+const { isPackagedInstall, DEV_ASSET_PATHS, assetPath } = require('./assets');
 
-const VERSION = '1.0.0';
+const VERSION = '2.0.0';
 const EXIT_FAILURE = 1;
 
 function installGlobalErrorHandlers(logger) {
@@ -97,25 +103,84 @@ async function runCore() {
     await core.start();
 }
 
+/** Abre um arquivo no Bloco de Notas (lista de programas, rotinas sugeridas). */
+function openInNotepad(filePath) {
+    childProcess.execFile(NOTEPAD_EXE, [filePath], { shell: false }, () => {});
+}
+
+/** "Publicar atualização": janela visível rodando o script de deploy do repositório. */
+function startDeploy(statusWriter, state) {
+    if (!fs.existsSync(paths.DEPLOY_SCRIPT)) {
+        statusWriter.notify('Não achei o script de deploy. Gere o pacote de novo a partir do repositório.', state());
+        return;
+    }
+    const child = childProcess.spawn(POWERSHELL_EXE, ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', paths.DEPLOY_SCRIPT], {
+        shell: false, detached: true, stdio: 'ignore', windowsHide: false, cwd: paths.REPO_DIR,
+    });
+    child.unref();
+}
+
+function createMenuActions({ programs, statusWriter, session, logger }) {
+    const notify = (text) => statusWriter.notify(text, session.getState());
+    return {
+        [TrayCommand.PROGRAMS_REFRESH]: async () => {
+            notify('Procurando programas no menu Iniciar…');
+            try {
+                const { total, active } = await programs.refresh();
+                notify(`Lista atualizada: ${total} programas (${active} ligados). Suas edições foram mantidas.`);
+            } catch (error) {
+                logger.warn({ event: 'programs_refresh_failed', errorName: error.name });
+                notify(`Não consegui atualizar a lista: ${error.message}`);
+            }
+        },
+        [TrayCommand.PROGRAMS_EDIT]: async () => openInNotepad(await programs.ensureFile()),
+        [TrayCommand.ROUTINES]: () => openInNotepad(programs.writeRoutineSuggestions()),
+        [TrayCommand.RENAME]: (name) => {
+            try {
+                notify(`Nome gravado: "${programs.setInvocationName(name)}". Use "Publicar atualização" para aplicar na Alexa.`);
+            } catch (error) {
+                notify(error.message);
+            }
+        },
+        [TrayCommand.DEPLOY]: () => startDeploy(statusWriter, session.getState),
+    };
+}
+
 function runDesktop() {
     const logger = createLocalLogger({ directory: paths.LOG_DIR, fileName: 'desktop.log', component: 'desktop' });
     installGlobalErrorHandlers(logger);
     const { config, localActions } = loadRuntimeConfig(logger);
+    const statusWriter = createStatusFileWriter(paths.STATUS_FILE);
+    const programs = createProgramsManager({
+        files: paths,
+        scanScript: assetPath('scan-programs.ps1', paths.SCAN_PROGRAMS_SCRIPT),
+    });
+    const internalRunner = createInternalRunner({
+        inputHelper: createInputHelper({ scriptPath: assetPath('input-helper.ps1', paths.INPUT_HELPER_SCRIPT), logger }),
+        loadPrograms: () => programs.load(),
+        launcher: createLauncher({ logger }),
+        logger,
+    });
     const session = createDesktopSession({
         endpointFile: paths.CORE_ENDPOINT_FILE,
         pipeSecret: config.pipeSecret,
         localActions,
-        executor: createActionExecutor({ logger }),
-        statusWriter: createStatusFileWriter(paths.STATUS_FILE),
+        executor: createActionExecutor({ logger, internalRunner }),
+        statusWriter,
         logger,
     });
     session.start();
+    // Primeira execução: cria a lista privada sozinha (o dono depois edita pelo menu).
+    if (!fs.existsSync(paths.PROGRAMS_FILE)) {
+        programs.refresh().catch((error) => logger.warn({ event: 'programs_first_scan_failed', errorName: error.name }));
+    }
     startTray({
         trayScript: isPackagedInstall() ? paths.TRAY_SCRIPT : DEV_ASSET_PATHS['tray.ps1'],
         statusFile: paths.STATUS_FILE,
         logFile: path.join(paths.LOG_DIR, 'agent.log'),
         session,
         logger,
+        menuActions: createMenuActions({ programs, statusWriter, session, logger }),
         onExit: () => {
             session.stop();
             process.exit(0);
