@@ -56,9 +56,23 @@ test('shouldLockAfterTooManyWrongPinsEvenWithRightOne', () => {
     fs.rmSync(directory, { recursive: true, force: true });
 });
 
-test('shouldRejectInvalidPins', () => {
+test('shouldAcceptPinsFromFourToEightDigitsIncludingLeadingZero', () => {
+    const directory = tempDir();
+    const lock = createSessionLock({ filePath: path.join(directory, 'c.json') });
+    for (const pin of ['0592', '04817', '730591', '0371946', '93051748']) {
+        lock.setPin(pin);
+        assert.equal(lock.check(pin), LockStatus.OK, pin);
+        lock.revoke();
+    }
+    for (const pin of ['123', '123456789', 'abcd', '', '12a4']) assert.throws(() => lock.setPin(pin), /de 4 a 8 dígitos/, pin);
+    fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('shouldRejectWeakPins', () => {
     const lock = createSessionLock({ filePath: path.join(tempDir(), 'c.json') });
-    for (const pin of ['12345', '1234567', '012345', 'abcdef', '']) assert.throws(() => lock.setPin(pin), /6 dígitos/, pin);
+    for (const pin of ['0000', '1111', '99999999', '1212', '123123', '12341234']) assert.throws(() => lock.setPin(pin), /repetidos ou padrões/, pin);
+    for (const pin of ['1234', '0123', '4321', '987654', '23456789']) assert.throws(() => lock.setPin(pin), /sequências/, pin);
+    for (const pin of ['2580', '159753', '1004']) assert.throws(() => lock.setPin(pin), /mais usados/, pin);
 });
 
 // ---------- CLI ----------

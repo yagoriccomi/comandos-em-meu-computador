@@ -336,20 +336,21 @@ function pinAgent(correctPin) {
 test('shouldAskPinThenSendOrderWithDigitsSpokenOneByOne', async () => {
     const { skill, executed, logs } = await buildSkill({ agentStatus: pinAgent('482913') });
     const question = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'rode os testes do projeto' } }));
-    assert.equal(speechOf(question), 'Para usar o Claude Code, diga o PIN de seis dígitos, um número de cada vez.');
+    assert.equal(speechOf(question), 'Para usar o Claude Code, diga o seu PIN, um número de cada vez.');
     assert.equal(question.sessionAttributes.pendingPin.params.pin, undefined, 'o PIN nunca fica na sessão');
     const wrong = await skill.invoke(followUp(question, 'PinIntent', { pin: { name: 'pin', value: '111111' } }));
     assert.equal(speechOf(wrong), 'PIN incorreto. Diga de novo, um número de cada vez.');
-    const right = await skill.invoke(followUp(wrong, 'PinIntent', { pin: { name: 'pin', value: '482913' } }));
+    const right = await skill.invoke(followUp(wrong, 'PinIntent', { pin: { name: 'pin', value: 'quatro oito dois nove um três' } }));
     assert.equal(speechOf(right), 'Enviei para o Claude Code. Quando ele terminar, o computador avisa.');
     assert.deepEqual(executed[2], { actionId: 'claude_code_ordem', params: { ordem: 'rode os testes do projeto', pin: '482913' } });
     assert.ok(!JSON.stringify(logs).includes('482913'), 'PIN nunca no log');
 });
 
-test('shouldRepromptWhenPinIsNotSixDigitsAndGiveUpAfterTwoTries', async () => {
+test('shouldRepromptWhenPinIsNotUnderstoodAndGiveUpAfterTwoTries', async () => {
     const { skill, executed } = await buildSkill({ agentStatus: pinAgent('482913') });
     let turn = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'x' } }));
-    for (const expected of ['Não entendi o PIN. Diga os seis dígitos, um de cada vez.', 'Não entendi o PIN. Diga os seis dígitos, um de cada vez.', 'Tudo bem, não fiz nada.']) {
+    const unclear = 'Não entendi o PIN. Diga um número de cada vez, por exemplo: zero, meia, três.';
+    for (const expected of [unclear, unclear, 'Tudo bem, não fiz nada.']) {
         turn = await skill.invoke(followUp(turn, 'PinIntent', { pin: { name: 'pin', value: '12' } }));
         assert.equal(speechOf(turn), expected);
     }
@@ -385,4 +386,11 @@ test('shouldLogOnlyHashOfUnregisteredVoice', async () => {
     const seen = logs.find((entry) => entry.event === 'person_seen');
     assert.match(seen.personHash, /^[0-9a-f]{64}$/);
     assert.ok(!JSON.stringify(logs).includes('SEGREDO'));
+});
+
+test('shouldUnderstandMeiaAsSixAndKeepLeadingZero', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: pinAgent('0631') });
+    const question = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'x' } }));
+    await skill.invoke(followUp(question, 'PinIntent', { pin: { name: 'pin', value: 'zero, meia, três, um' } }));
+    assert.equal(executed[1].params.pin, '0631');
 });

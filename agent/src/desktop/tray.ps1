@@ -117,7 +117,7 @@ $claudeFolderItem.add_Click({
 })
 $claudePinItem.add_Click({
     $pin = [Microsoft.VisualBasic.Interaction]::InputBox(
-        "PIN de 6 digitos para o Claude Code (nao pode comecar com 0).`nA Alexa vai pedir este PIN a cada 3 horas.",
+        "PIN de 4 a 8 dígitos para o Claude Code (pode começar com 0).`nEvite repetições e sequências como 1111 ou 1234.`nA Alexa vai pedir este PIN a cada 3 horas.",
         $AppName, '')
     $digits = ($pin -replace '[^0-9]', '')
     if ($digits) { Send-Command "claude_pin $digits" }

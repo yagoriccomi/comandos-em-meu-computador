@@ -422,7 +422,7 @@
                     "name": "pin",
                     "slot": "pin",
                     "type": "text",
-                    "maxLength": 6,
+                    "maxLength": 8,
                     "optional": true
                 }
             ]

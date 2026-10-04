@@ -357,16 +357,17 @@
           "slots": [
             {
               "name": "pin",
-              "type": "AMAZON.NUMBER"
+              "type": "TIPO_PIN"
             }
           ],
           "samples": [
+            "{pin}",
             "o pin é {pin}",
             "pin {pin}",
             "meu pin é {pin}",
             "a senha é {pin}",
             "o código é {pin}",
-            "pin é {pin}"
+            "é {pin}"
           ]
         }
       ],
@@ -780,6 +781,36 @@
                   "número três",
                   "opção três"
                 ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TIPO_PIN",
+          "values": [
+            {
+              "name": {
+                "value": "zero meia três um"
+              }
+            },
+            {
+              "name": {
+                "value": "um dois três quatro cinco"
+              }
+            },
+            {
+              "name": {
+                "value": "sete oito zero nove"
+              }
+            },
+            {
+              "name": {
+                "value": "meia meia dois um oito"
+              }
+            },
+            {
+              "name": {
+                "value": "quatro zero zero dois nove três"
               }
             }
           ]
