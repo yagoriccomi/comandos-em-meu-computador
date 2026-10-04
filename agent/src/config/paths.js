@@ -35,6 +35,8 @@ module.exports = Object.freeze({
     ROUTINES_FILE: path.join(USER_DATA_DIR, 'rotinas-sugeridas.txt'),
     SPEAK_SCRIPT: path.join(INSTALL_DIR, 'speak.ps1'),
     CLAUDE_LOCK_FILE: path.join(USER_DATA_DIR, 'claude-code.json'),
+    CLAUDE_FOLDERS_FILE: path.join(USER_DATA_DIR, 'pastas-claude-code.json'),
+    CLAUDE_PROJECTS_DIR: path.join(process.env.USERPROFILE || 'C:\\Users\\Default', '.claude', 'projects'),
     CLAUDE_ANSWER_FILE: path.join(USER_DATA_DIR, 'claude', 'ultima-resposta.json'),
     CLAUDE_ANSWER_TEXT_FILE: path.join(USER_DATA_DIR, 'claude', 'ultima-resposta.txt'),
     CLAUDE_QUESTIONS_DIR: path.join(USER_DATA_DIR, 'claude', 'perguntas'),

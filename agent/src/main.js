@@ -30,6 +30,7 @@ const { createProgramsManager } = require('./programs/programsManager');
 const { createClaudeCli } = require('./claude/claudeCli');
 const { createClaudeJobs } = require('./claude/claudeJobs');
 const { createSessionLock } = require('./claude/sessionLock');
+const { createClaudeFolders } = require('./claude/claudeFolders');
 const { isPackagedInstall, DEV_ASSET_PATHS, assetPath } = require('./assets');
 
 const VERSION = '2.0.0';
@@ -135,7 +136,7 @@ function createSpeaker(logger) {
     };
 }
 
-function createMenuActions({ programs, statusWriter, session, logger, sessionLock }) {
+function createMenuActions({ programs, statusWriter, session, logger, sessionLock, claudeFolders }) {
     const notify = (text) => statusWriter.notify(text, session.getState());
     return {
         [TrayCommand.CLAUDE_ANSWER]: () => (fs.existsSync(paths.CLAUDE_ANSWER_TEXT_FILE)
@@ -146,11 +147,16 @@ function createMenuActions({ programs, statusWriter, session, logger, sessionLoc
         },
         [TrayCommand.CLAUDE_FOLDER]: (folder) => {
             try {
-                notify(`Ordens do Claude Code vão para: ${programs.setClaudeFolder(folder)}`);
+                notify(`Pasta adicionada e marcada como padrão: ${claudeFolders.addFolder(folder)}`);
             } catch (error) {
                 notify('Não consegui usar essa pasta.');
             }
         },
+        [TrayCommand.CLAUDE_FOLDERS_IMPORT]: () => {
+            const { total, active } = claudeFolders.importFromClaudeCode();
+            notify(`Pastas do Claude Code: ${total} na lista (${active} ligadas). Suas edições foram mantidas.`);
+        },
+        [TrayCommand.CLAUDE_FOLDERS_EDIT]: () => openInNotepad(claudeFolders.ensureFile()),
         [TrayCommand.CLAUDE_SET_PIN]: (pin) => {
             try {
                 sessionLock.setPin(pin);
@@ -195,10 +201,14 @@ function runDesktop() {
     let currentSession;
     const notify = (text) => statusWriter.notify(text, currentSession ? currentSession.getState() : undefined);
     const sessionLock = createSessionLock({ filePath: paths.CLAUDE_LOCK_FILE });
+    const claudeFolders = createClaudeFolders({
+        listFile: paths.CLAUDE_FOLDERS_FILE,
+        projectsDir: paths.CLAUDE_PROJECTS_DIR,
+        legacyDefault: () => programs.claudeFolder(),
+    });
     const claudeJobs = createClaudeJobs({
         cli: createClaudeCli(),
         files: { answerFile: paths.CLAUDE_ANSWER_FILE, answerTextFile: paths.CLAUDE_ANSWER_TEXT_FILE, questionsDir: paths.CLAUDE_QUESTIONS_DIR },
-        getProjectFolder: () => programs.claudeFolder(),
         speak: createSpeaker(logger),
         notify,
         logger,
@@ -209,6 +219,7 @@ function runDesktop() {
         launcher: createLauncher({ logger }),
         claudeJobs,
         sessionLock,
+        claudeFolders,
         notify,
         logger,
     });
@@ -223,6 +234,13 @@ function runDesktop() {
     currentSession = session;
     session.start();
     // Primeira execução: cria a lista privada sozinha (o dono depois edita pelo menu).
+    if (!fs.existsSync(paths.CLAUDE_FOLDERS_FILE)) {
+        try {
+            claudeFolders.importFromClaudeCode();
+        } catch (error) {
+            logger.warn({ event: 'claude_folders_first_import_failed', errorName: error.name });
+        }
+    }
     if (!fs.existsSync(paths.PROGRAMS_FILE)) {
         programs.refresh().catch((error) => logger.warn({ event: 'programs_first_scan_failed', errorName: error.name }));
     }
@@ -232,7 +250,7 @@ function runDesktop() {
         logFile: path.join(paths.LOG_DIR, 'agent.log'),
         session,
         logger,
-        menuActions: createMenuActions({ programs, statusWriter, session, logger, sessionLock }),
+        menuActions: createMenuActions({ programs, statusWriter, session, logger, sessionLock, claudeFolders }),
         onExit: () => {
             session.stop();
             process.exit(0);

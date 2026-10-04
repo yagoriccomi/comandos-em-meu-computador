@@ -424,8 +424,16 @@
                     "type": "text",
                     "maxLength": 8,
                     "optional": true
+                },
+                {
+                    "name": "projeto",
+                    "slot": "projeto",
+                    "type": "text",
+                    "maxLength": 100,
+                    "optional": true
                 }
-            ]
+            ],
+            "choiceParam": "projeto"
         },
         {
             "id": "claude_code_encerrar",

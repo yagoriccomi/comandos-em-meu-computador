@@ -125,9 +125,10 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
 
     /** O PC achou vários parecidos (ou só parecidos): guarda as opções e pergunta qual. */
     function askWhichOne(handlerInput, action, params, result, choices) {
-        if (choices.length === 0) return speak(handlerInput, speech.PROGRAM_NOT_FOUND);
+        const isProject = action.choiceParam === 'projeto';
+        if (choices.length === 0) return speak(handlerInput, isProject ? speech.PROJECT_NOT_FOUND : speech.PROGRAM_NOT_FOUND);
         storePending(handlerInput, PENDING_CHOICE_ATTRIBUTE, { actionId: action.id, params, choices, expiresAt: clock() + PENDING_CONFIRMATION_TTL_MS });
-        return ask(handlerInput, result === DeliveryResult.AMBIGUOUS ? speech.whichOne(choices) : speech.didYouMean(choices));
+        return ask(handlerInput, result === DeliveryResult.AMBIGUOUS ? speech.whichOne(choices) : speech.didYouMean(choices, isProject ? 'projeto' : 'programa'));
     }
 
     /**
@@ -262,7 +263,10 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
                 : pickChoice(pending.choices, spokenSlotValue(handlerInput.requestEnvelope));
             const action = catalog.findById(pending.actionId);
             if (!chosen || !action) return speak(handlerInput, speech.CHOICE_NOT_UNDERSTOOD);
-            const resolution = revalidateParams(action, { ...pending.params, programa: chosen, exato: 1 });
+            // Programa escolhido vai com "exato"; outras escolhas (ex.: projeto do Claude Code) vão no parâmetro da ação.
+            const choiceParam = action.choiceParam || 'programa';
+            const choice = choiceParam === 'programa' ? { programa: chosen, exato: 1 } : { [choiceParam]: chosen };
+            const resolution = revalidateParams(action, { ...pending.params, ...choice });
             if (!resolution.ok) {
                 logger.info({ event: 'request_rejected', reason: resolution.reason });
                 return speak(handlerInput, speech.UNKNOWN_ACTION);

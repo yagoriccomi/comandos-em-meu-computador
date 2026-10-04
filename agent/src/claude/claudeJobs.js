@@ -31,13 +31,12 @@ const GENERIC_FAILURE = 'O Claude não conseguiu responder desta vez.';
  * @param {object} deps
  * @param {{ run: Function }} deps.cli
  * @param {{ answerFile: string, answerTextFile: string, questionsDir: string }} deps.files
- * @param {() => string|undefined} deps.getProjectFolder   pasta escolhida na bandeja para as ordens
  * @param {() => string|undefined} [deps.getPreferredExe]
  * @param {(text: string) => void} deps.speak
  * @param {(text: string) => void} deps.notify
  * @param {object} deps.logger
  */
-function createClaudeJobs({ cli, files, getProjectFolder, getPreferredExe = () => undefined, speak, notify, logger, clock = Date.now }) {
+function createClaudeJobs({ cli, files, getPreferredExe = () => undefined, speak, notify, logger, clock = Date.now }) {
     let running = 0;
     let latestJob = 0;
 
@@ -91,9 +90,8 @@ function createClaudeJobs({ cli, files, getProjectFolder, getPreferredExe = () =
             runJob('pergunta', { args: QUESTION_ARGS, prompt: question, cwd: files.questionsDir, timeoutMs: QUESTION_TIMEOUT_MS });
         },
 
-        /** Ordem ao Claude Code na pasta escolhida: continua a última conversa, ou abre uma nova ("novo chat, …"). */
-        order(text) {
-            const folder = getProjectFolder();
+        /** Ordem ao Claude Code na pasta dada: continua a última conversa, ou abre uma nova ("novo chat, …"). */
+        order(text, folder) {
             if (!folder || !fs.existsSync(folder)) throw new ClaudeCliError('no_project_folder');
             const isNewChat = NEW_CHAT_PREFIX.test(text);
             const prompt = isNewChat ? text.replace(NEW_CHAT_PREFIX, '') : text;

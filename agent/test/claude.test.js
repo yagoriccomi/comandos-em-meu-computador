@@ -128,7 +128,7 @@ test('shouldSendSpokenTextOnlyThroughStdinWithFixedArguments', async () => {
 });
 
 // ---------- tarefas ----------
-function jobsWith(replies, { folder } = {}) {
+function jobsWith(replies) {
     const directory = tempDir();
     const spoken = [];
     const notices = [];
@@ -136,7 +136,6 @@ function jobsWith(replies, { folder } = {}) {
     const jobs = createClaudeJobs({
         cli: createClaudeCli({ spawn, findExecutable: () => 'C:\\claude.exe' }),
         files: { answerFile: path.join(directory, 'r.json'), answerTextFile: path.join(directory, 'r.txt'), questionsDir: path.join(directory, 'q') },
-        getProjectFolder: () => folder,
         speak: (text) => spoken.push(text),
         notify: (text) => notices.push(text),
         logger: QUIET_LOGGER,
@@ -167,10 +166,10 @@ test('shouldExplainLoginWhenClaudeCodeIsLoggedOut', async () => {
 
 test('shouldContinueLastChatOrOpenNewChatWithOpus', async () => {
     const folder = tempDir();
-    const { jobs, calls } = jobsWith([{ result: 'ok', is_error: false }, { result: 'ok', is_error: false }], { folder });
-    jobs.order('rode os testes');
+    const { jobs, calls } = jobsWith([{ result: 'ok', is_error: false }, { result: 'ok', is_error: false }]);
+    jobs.order('rode os testes', folder);
     await settle();
-    jobs.order('novo chat, crie um README');
+    jobs.order('novo chat, crie um README', folder);
     await settle();
     assert.deepEqual(calls[0].args.slice(0, CONTINUE_ORDER_ARGS.length), [...CONTINUE_ORDER_ARGS]);
     assert.deepEqual(calls[1].args.slice(0, NEW_ORDER_ARGS.length), [...NEW_ORDER_ARGS]);
@@ -180,8 +179,8 @@ test('shouldContinueLastChatOrOpenNewChatWithOpus', async () => {
 
 test('shouldOpenNewChatWhenFolderHasNoConversationYet', async () => {
     const folder = tempDir();
-    const { jobs, calls } = jobsWith([{ result: 'No conversation found to continue', is_error: true }, { result: 'feito\nRESUMO: feito', is_error: false }], { folder });
-    jobs.order('rode os testes');
+    const { jobs, calls } = jobsWith([{ result: 'No conversation found to continue', is_error: true }, { result: 'feito\nRESUMO: feito', is_error: false }]);
+    jobs.order('rode os testes', folder);
     await settle();
     assert.equal(calls.length, 2);
     assert.ok(calls[1].args.includes('opus'));
@@ -189,11 +188,12 @@ test('shouldOpenNewChatWhenFolderHasNoConversationYet', async () => {
 
 test('shouldRefuseOrderWithoutProjectFolder', () => {
     const { jobs } = jobsWith([]);
-    assert.throws(() => jobs.order('x'), (error) => error.code === 'no_project_folder');
+    assert.throws(() => jobs.order('x', undefined), (error) => error.code === 'no_project_folder');
+    assert.throws(() => jobs.order('x', 'C:\\nao\\existe'), (error) => error.code === 'no_project_folder');
 });
 
 // ---------- ações internas ----------
-function runnerWith({ lockStatus = LockStatus.OK, answer = { state: JobState.NONE } } = {}) {
+function runnerWith({ lockStatus = LockStatus.OK, answer = { state: JobState.NONE }, folder = { status: 'ok', folder: 'C:\\P', order: 'rode os testes' } } = {}) {
     const asked = [];
     const ordered = [];
     const notices = [];
@@ -202,7 +202,8 @@ function runnerWith({ lockStatus = LockStatus.OK, answer = { state: JobState.NON
         inputHelper: { run: async () => 'ok' },
         loadPrograms: () => ({ programs: [] }),
         launcher: { openApp: async () => true, openUrl: async () => true },
-        claudeJobs: { ask: (text) => asked.push(text), order: (text) => ordered.push(text), lastAnswer: () => answer },
+        claudeJobs: { ask: (text) => asked.push(text), order: (text, where) => ordered.push([text, where]), lastAnswer: () => answer },
+        claudeFolders: { resolve: () => folder },
         sessionLock: { check: () => lockStatus, revoke: () => { revoked = true; } },
         notify: (text) => notices.push(text),
         logger: QUIET_LOGGER,
@@ -227,7 +228,15 @@ test('shouldGateOrdersBySessionLock', async () => {
     assert.match(noPin.notices[0], /Defina o PIN/);
     const open = runnerWith();
     assert.deepEqual(await open.runner.run('claude_code_ordem', { ordem: 'rode os testes' }), { ok: true });
-    assert.deepEqual(open.ordered, ['rode os testes']);
+    assert.deepEqual(open.ordered, [['rode os testes', 'C:\\P']]);
+    const ambiguous = runnerWith({ folder: { status: 'ambiguous', choices: ['Gerador-de-Imagens', 'Calculo-de-Recisao'] } });
+    assert.deepEqual(await ambiguous.runner.run('claude_code_ordem', { ordem: 'no projeto x faça y' }),
+        { ok: false, status: 'ambiguous', choices: ['Gerador-de-Imagens', 'Calculo-de-Recisao'] });
+    const noDefault = runnerWith({ folder: { status: 'no_default' } });
+    assert.deepEqual(await noDefault.runner.run('claude_code_ordem', { ordem: 'faça y' }), { ok: false });
+    assert.match(noDefault.notices[0], /pasta padrão/);
+    const locked = runnerWith({ lockStatus: LockStatus.PIN_REQUIRED, folder: { status: 'ambiguous', choices: ['segredo'] } });
+    assert.deepEqual(await locked.runner.run('claude_code_ordem', { ordem: 'no projeto x y' }), { ok: false, status: 'pin_required' }, 'sem PIN, nem os nomes dos projetos saem do PC');
     const end = runnerWith();
     assert.deepEqual(await end.runner.run('claude_code_encerrar', {}), { ok: true });
     assert.equal(end.wasRevoked(), true);

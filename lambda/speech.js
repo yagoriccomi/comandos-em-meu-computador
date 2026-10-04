@@ -66,7 +66,8 @@ module.exports = Object.freeze({
     pcText: (text) => escapeSsml(text),
     CHOICE_NOT_UNDERSTOOD: 'Não entendi qual deles. Peça de novo, por favor.',
     whichOne: (choices) => `Encontrei ${joinNames(choices, 'e')}. Qual deles?`,
-    didYouMean: (choices) => `Não achei esse programa. Você quis dizer ${joinNames(choices, 'ou')}?`,
+    didYouMean: (choices, what = 'programa') => `Não achei esse ${what}. Você quis dizer ${joinNames(choices, 'ou')}?`,
+    PROJECT_NOT_FOUND: 'Não achei esse projeto do Claude Code.',
     askForParam: (param) => (ASK_BY_TYPE[param.type] || ASK_BY_TYPE.integer)(param),
     invalidParam: (param) => (INVALID_BY_TYPE[param.type] || INVALID_BY_TYPE.integer)(param),
     confirmAction: (action, params) => {

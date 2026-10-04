@@ -394,3 +394,19 @@ test('shouldUnderstandMeiaAsSixAndKeepLeadingZero', async () => {
     await skill.invoke(followUp(question, 'PinIntent', { pin: { name: 'pin', value: 'zero, meia, três, um' } }));
     assert.equal(executed[1].params.pin, '0631');
 });
+
+test('shouldAskWhichProjectAndResendOrderWithChosenProject', async () => {
+    const agent = (command) => (command.params.projeto ? { status: 'ok' } : { status: 'ambiguous', choices: ['Gerador-de-Imagens', 'Gerador-de-Videos'] });
+    const { skill, executed } = await buildSkill({ agentStatus: agent });
+    const question = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'no projeto gerador crie um teste' } }));
+    assert.equal(speechOf(question), 'Encontrei Gerador-de-Imagens e Gerador-de-Videos. Qual deles?');
+    const answer = await skill.invoke(followUp(question, 'EscolhaIntent', { escolha: { name: 'escolha', value: 'o segundo' } }));
+    assert.equal(speechOf(answer), 'Enviei para o Claude Code. Quando ele terminar, o computador avisa.');
+    assert.deepEqual(executed[1].params, { ordem: 'no projeto gerador crie um teste', projeto: 'Gerador-de-Videos' });
+});
+
+test('shouldSayProjectNotFound', async () => {
+    const { skill } = await buildSkill({ agentStatus: () => ({ status: 'not_found', choices: [] }) });
+    const response = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'no projeto banana faça algo' } }));
+    assert.equal(speechOf(response), 'Não achei esse projeto do Claude Code.');
+});
