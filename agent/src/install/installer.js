@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const paths = require('../config/paths');
 const { validateAgentConfig, loadAgentConfig } = require('../config/agentConfig');
-const { PACKAGED_FILES, POWERSHELL_ASSETS, currentAppFile, isPackagedInstall, packageDirectory, readAsset } = require('../assets');
+const { PACKAGED_FILES, POWERSHELL_ASSETS, TRAY_ICON_FOLDER, TRAY_ICON_FILES, currentAppFile, isPackagedInstall, packageDirectory, readAsset } = require('../assets');
 const { INTERNAL_ACTION_IDS } = require('../internal/internalActionIds');
 const { createConsolePrompt } = require('./consolePrompt');
 const { normalizeBrokerUrl, isValidSkillId, generateIdentity, buildConfigFiles } = require('./secretsFactory');
@@ -218,6 +218,11 @@ function installProgramFiles() {
     if (sourceDir !== path.resolve(paths.INSTALL_DIR).toLowerCase()) {
         for (const fileName of PACKAGED_FILES) {
             fs.copyFileSync(path.join(packageDirectory(), fileName), path.join(paths.INSTALL_DIR, fileName));
+        }
+        fs.mkdirSync(path.join(paths.INSTALL_DIR, TRAY_ICON_FOLDER), { recursive: true });
+        for (const fileName of TRAY_ICON_FILES) {
+            const source = path.join(packageDirectory(), TRAY_ICON_FOLDER, fileName);
+            if (fs.existsSync(source)) fs.copyFileSync(source, path.join(paths.INSTALL_DIR, TRAY_ICON_FOLDER, fileName));
         }
     }
     for (const script of POWERSHELL_ASSETS) {
