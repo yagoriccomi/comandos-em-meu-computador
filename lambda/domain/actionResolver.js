@@ -9,6 +9,7 @@
  */
 const { ParamType, VERB_PATTERN } = require('./catalog');
 const { isValidTextParam } = require('../protocol/message');
+const { detectClaudePhrase } = require('./claudePhrase');
 
 const ENTITY_MATCH = 'ER_SUCCESS_MATCH';
 const DIGITS_ONLY = /^\d{1,6}$/;
@@ -119,10 +120,28 @@ function verbGroupOf(intent, catalog) {
     return group || OPEN_VERB_GROUP;
 }
 
+/** Frase inteira de um intent genérico (verbo + nome, ou frase livre), para checar se era um pedido ao Claude. */
+function spokenSentence(intent) {
+    const slots = intent.slots || {};
+    return [slots.verbo, slots.aplicativo, slots.rotina].filter((slot) => slot && !isEmpty(slot.value)).map((slot) => slot.value).join(' ');
+}
+
+/** "mandar o Claude Code …" / "perguntar ao Claude …" que caiu num intent genérico vira o pedido certo. */
+function resolveMisroutedClaudePhrase(intent, catalog) {
+    const detected = detectClaudePhrase(spokenSentence(intent));
+    const action = detected && catalog.findById(detected.actionId);
+    if (!action) return undefined;
+    const textParam = action.params.find((param) => param.type === ParamType.TEXT && !param.optional);
+    const parsed = parseText(textParam, detected.text);
+    return parsed.ok ? { ok: true, action, params: { [textParam.name]: parsed.value } } : undefined;
+}
+
 function resolveIntent(intent, catalog) {
     if (!intent || typeof intent.name !== 'string') return { ok: false, reason: ResolutionFailure.UNKNOWN_ACTION };
     const slotIntent = SLOT_INTENTS[intent.name];
     if (slotIntent) {
+        const misrouted = resolveMisroutedClaudePhrase(intent, catalog);
+        if (misrouted) return misrouted;
         const slot = intent.slots && intent.slots[slotIntent.slotName];
         const catalogAction = catalog.findById(findMatchedEntityId(slot));
         if (intent.name === 'ExecutarRotinaIntent') {

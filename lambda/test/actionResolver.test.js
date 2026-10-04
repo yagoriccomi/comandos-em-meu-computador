@@ -172,3 +172,26 @@ test('shouldPickProgramActionBySpokenVerbInTheSameIntent', () => {
     }), catalog);
     assert.deepEqual([closeNetflix.action.id, closeNetflix.params.programa], ['fechar_programa', 'netflix']);
 });
+
+// ---- Frases do Claude que a Alexa encaixou no intent genérico ----
+const { detectClaudePhrase } = require('../domain/claudePhrase');
+
+test('shouldRerouteClaudeCodeOrderCaughtAsProgram', () => {
+    const slots = { ...slotWithMatch('verbo', 'mandar', undefined), ...slotWithMatch('aplicativo', 'o Claude Code no projeto gerador de imagens criar um teste', undefined) };
+    const result = resolveIntent(intentWith('AbrirAplicativoIntent', slots), catalog);
+    assert.deepEqual([result.action.id, result.params], ['claude_code_ordem', { ordem: 'no projeto gerador de imagens criar um teste' }]);
+});
+
+test('shouldRerouteClaudePhrasesCaughtAsFreePhrase', () => {
+    const order = resolveIntent(intentWith('ExecutarRotinaIntent', slotWithMatch('rotina', 'manda pro cloud code rodar os testes', undefined)), catalog);
+    assert.deepEqual([order.action.id, order.params], ['claude_code_ordem', { ordem: 'rodar os testes' }]);
+    const question = resolveIntent(intentWith('ExecutarRotinaIntent', slotWithMatch('rotina', 'perguntar ao Cláudio qual é a capital da Austrália', undefined)), catalog);
+    assert.deepEqual([question.action.id, question.params], ['perguntar_claude', { pergunta: 'qual é a capital da Austrália' }]);
+});
+
+test('shouldNotTreatOtherPhrasesAsClaude', () => {
+    for (const phrase of ['abrir o discord', 'mandar mensagem no whatsapp', 'claude code', 'perguntar ao google o tempo', 'abrir o cloudflare']) {
+        assert.equal(detectClaudePhrase(phrase), undefined, phrase);
+    }
+    assert.equal(resolveIntent(intentWith('AbrirAplicativoIntent', slotWithMatch('aplicativo', 'claude', undefined)), catalog).action.id, 'abrir_programa');
+});
