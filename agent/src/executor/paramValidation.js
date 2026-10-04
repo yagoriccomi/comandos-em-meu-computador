@@ -23,9 +23,13 @@ function isValidValue(param, value) {
 function hasValidParams(publicAction, params) {
     const declared = publicAction.params;
     if (!params || typeof params !== 'object' || Array.isArray(params)) return false;
-    const received = Object.keys(params);
-    if (received.length !== declared.length) return false;
-    return declared.every((param) => Object.prototype.hasOwnProperty.call(params, param.name) && isValidValue(param, params[param.name]));
+    const declaredNames = new Set(declared.map((param) => param.name));
+    if (Object.keys(params).some((name) => !declaredNames.has(name))) return false;
+    return declared.every((param) => {
+        const present = Object.prototype.hasOwnProperty.call(params, param.name);
+        if (!present) return param.optional === true;
+        return isValidValue(param, params[param.name]);
+    });
 }
 
 module.exports = { hasValidParams };

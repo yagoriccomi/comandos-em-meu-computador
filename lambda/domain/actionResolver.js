@@ -84,6 +84,7 @@ function resolveParams(action, intent) {
                 params[param.name] = param.default;
                 continue;
             }
+            if (param.optional) continue;
             return { ok: false, reason: ResolutionFailure.MISSING_PARAM, action, missingSlot: param.slot };
         }
         const parsed = parseParamValue(param, slot);
@@ -149,12 +150,12 @@ function isValidResolvedValue(param, value) {
 /** Parâmetros guardados na sessão: exatamente os declarados e válidos para o tipo. */
 function revalidateParams(action, params) {
     const values = params && typeof params === 'object' ? params : {};
-    const declaredNames = action.params.map((param) => param.name).sort();
-    if (JSON.stringify(Object.keys(values).sort()) !== JSON.stringify(declaredNames)) {
-        return { ok: false, reason: ResolutionFailure.INVALID_PARAM, action };
-    }
+    const declaredNames = new Set(action.params.map((param) => param.name));
+    if (Object.keys(values).some((name) => !declaredNames.has(name))) return { ok: false, reason: ResolutionFailure.INVALID_PARAM, action };
     for (const param of action.params) {
-        if (!isValidResolvedValue(param, values[param.name])) return { ok: false, reason: ResolutionFailure.INVALID_PARAM, action, param };
+        const present = Object.prototype.hasOwnProperty.call(values, param.name);
+        if (!present && param.optional) continue;
+        if (!present || !isValidResolvedValue(param, values[param.name])) return { ok: false, reason: ResolutionFailure.INVALID_PARAM, action, param };
     }
     return { ok: true, action, params: { ...values } };
 }
