@@ -31,6 +31,7 @@ const { createClaudeCli } = require('./claude/claudeCli');
 const { createClaudeJobs } = require('./claude/claudeJobs');
 const { createSessionLock } = require('./claude/sessionLock');
 const { createClaudeFolders } = require('./claude/claudeFolders');
+const { createClaudeChats } = require('./claude/claudeChats');
 const { isPackagedInstall, DEV_ASSET_PATHS, assetPath } = require('./assets');
 
 const VERSION = '2.0.0';
@@ -220,6 +221,7 @@ function runDesktop() {
         claudeJobs,
         sessionLock,
         claudeFolders,
+        claudeChats: createClaudeChats({ filePath: paths.CLAUDE_CHATS_FILE }),
         notify,
         logger,
     });

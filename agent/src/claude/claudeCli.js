@@ -18,8 +18,13 @@ const INHERITED_CLAUDE_VARIABLES = /^(CLAUDE|ANTHROPIC)/i;
 const QUESTION_ARGS = Object.freeze(['-p', '--model', 'sonnet', '--effort', 'medium', '--tools', 'WebSearch,WebFetch', '--permission-mode', 'dontAsk', '--output-format', 'json']);
 /** Ordem em chat NOVO: Opus mais atual (alias "opus"), esforço médio, modo automático. */
 const NEW_ORDER_ARGS = Object.freeze(['-p', '--model', 'opus', '--effort', 'medium', '--permission-mode', 'auto', '--output-format', 'json']);
-/** Ordem no chat já existente da pasta: mantém o modelo do chat e só repassa o texto. */
-const CONTINUE_ORDER_ARGS = Object.freeze(['-p', '--continue', '--permission-mode', 'auto', '--output-format', 'json']);
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Ordem num chat JÁ vinculado: mantém o modelo do chat e só repassa o texto. O id vem do próprio CLI. */
+function resumeOrderArgs(sessionId) {
+    if (!SESSION_ID_PATTERN.test(sessionId || '')) throw new ClaudeCliError('invalid_session_id');
+    return ['-p', '--resume', sessionId, '--permission-mode', 'auto', '--output-format', 'json'];
+}
 
 const VOICE_SYSTEM_PROMPT = [
     'Este pedido chegou por voz, pela Alexa, e a resposta será lida em voz alta.',
@@ -83,7 +88,7 @@ function splitSummary(text, maxSummaryLength) {
 function createClaudeCli({ spawn = childProcess.spawn, findExecutable = findClaudeExecutable } = {}) {
     /**
      * @param {{ args: string[], prompt: string, cwd: string, timeoutMs: number, preferredExe?: string }} request
-     * @returns {Promise<{ result: string, isError: boolean }>}
+     * @returns {Promise<{ result: string, isError: boolean, sessionId?: string }>}
      */
     function run({ args, prompt, cwd, timeoutMs, preferredExe }) {
         const executable = findExecutable({ preferred: preferredExe });
@@ -109,7 +114,8 @@ function createClaudeCli({ spawn = childProcess.spawn, findExecutable = findClau
                 clearTimeout(timer);
                 try {
                     const parsed = JSON.parse(output);
-                    resolve({ result: String(parsed.result || ''), isError: parsed.is_error === true });
+                    const sessionId = SESSION_ID_PATTERN.test(parsed.session_id || '') ? parsed.session_id : undefined;
+                    resolve({ result: String(parsed.result || ''), isError: parsed.is_error === true, sessionId });
                 } catch (error) {
                     reject(new ClaudeCliError('claude_bad_output'));
                 }
@@ -123,7 +129,7 @@ function createClaudeCli({ spawn = childProcess.spawn, findExecutable = findClau
 module.exports = {
     QUESTION_ARGS,
     NEW_ORDER_ARGS,
-    CONTINUE_ORDER_ARGS,
+    resumeOrderArgs,
     ClaudeCliError,
     findClaudeExecutable,
     cleanEnvironment,

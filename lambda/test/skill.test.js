@@ -410,3 +410,20 @@ test('shouldSayProjectNotFound', async () => {
     const response = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'no projeto banana faça algo' } }));
     assert.equal(speechOf(response), 'Não achei esse projeto do Claude Code.');
 });
+
+test('shouldAskContinueOrNewChatAfterThreeHours', async () => {
+    const agent = (command) => (command.params.chat ? { status: 'ok' } : { status: 'chat_choice' });
+    for (const [intentName, slots, expected] of [
+        ['AMAZON.YesIntent', {}, 'continuar'],
+        ['AMAZON.NoIntent', {}, 'novo'],
+        ['ExecutarRotinaIntent', { rotina: { name: 'rotina', value: 'continuar o anterior' } }, 'continuar'],
+        ['EscolhaIntent', { escolha: { name: 'escolha', value: 'começar um novo' } }, 'novo'],
+    ]) {
+        const { skill: alexa, executed } = await buildSkill({ agentStatus: agent });
+        const question = await alexa.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'rode os testes' } }));
+        assert.equal(speechOf(question), 'Faz mais de três horas desde a última ordem. Quer continuar o chat anterior do Claude Code ou começar um novo?');
+        const answer = await alexa.invoke(followUp(question, intentName, slots));
+        assert.equal(speechOf(answer), 'Enviei para o Claude Code. Quando ele terminar, o computador avisa.', intentName);
+        assert.deepEqual(executed[1].params, { ordem: 'rode os testes', chat: expected }, intentName);
+    }
+});

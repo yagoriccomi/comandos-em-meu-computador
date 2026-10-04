@@ -8,6 +8,7 @@ const { protocol } = require('../shared');
 
 const DETAILED_STATUSES = Object.freeze([
     protocol.AckStatus.AMBIGUOUS, protocol.AckStatus.NOT_FOUND, protocol.AckStatus.PENDING, protocol.AckStatus.PIN_REQUIRED, protocol.AckStatus.LOCKED,
+    protocol.AckStatus.CHAT_CHOICE,
 ]);
 
 function isValidSpeechText(text) {

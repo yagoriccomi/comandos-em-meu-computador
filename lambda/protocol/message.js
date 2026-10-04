@@ -19,6 +19,7 @@ const MessageType = Object.freeze({ COMMAND: 'cmd', ACK: 'ack' });
 /**
  * ambiguous/not_found: o PC achou vários programas parecidos ou nenhum; "choices" traz até 3 nomes para a Alexa falar.
  * pending: o Claude ainda está respondendo. pin_required/locked: a trava do Claude Code pede o PIN ou está bloqueada.
+ * chat_choice: passaram 3 h desde a última ordem; perguntar se continua o chat anterior ou começa um novo.
  * "text" (opcional): resumo curto para a Alexa ler (resposta do Claude).
  */
 const AckStatus = Object.freeze({
@@ -29,6 +30,7 @@ const AckStatus = Object.freeze({
     PENDING: 'pending',
     PIN_REQUIRED: 'pin_required',
     LOCKED: 'locked',
+    CHAT_CHOICE: 'chat_choice',
 });
 const MAX_ACK_TEXT_LENGTH = 600;
 const MAX_ACK_CHOICES = 3;

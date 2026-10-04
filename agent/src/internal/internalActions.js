@@ -10,7 +10,9 @@ const { matchProgram, MatchStatus } = require('../programs/programMatcher');
 const { protocol } = require('../shared');
 const { LockStatus } = require('../claude/sessionLock');
 const { JobState } = require('../claude/claudeJobs');
-const { FolderStatus } = require('../claude/claudeFolders');
+const { FolderStatus, namesProject } = require('../claude/claudeFolders');
+
+const CHAT_CHOICES = Object.freeze({ CONTINUE: 'continuar', NEW: 'novo' });
 
 const LOCK_RESULTS = Object.freeze({
     [LockStatus.PIN_REQUIRED]: { ok: false, status: protocol.AckStatus.PIN_REQUIRED },
@@ -55,10 +57,12 @@ function isHelperOk(reply) {
  * @param {{ ask: Function, order: Function, lastAnswer: Function }} [deps.claudeJobs]
  * @param {{ check: Function, revoke: Function }} [deps.sessionLock]
  * @param {{ resolve: Function }} [deps.claudeFolders]   lista privada de pastas do Claude Code
+ * @param {{ activeCurrent: Function, previousFor: Function, isActive: Function, remember: Function, release: Function }} [deps.claudeChats]
  * @param {(text: string) => void} [deps.notify]   balão perto do relógio
  */
 function createInternalRunner({
-    inputHelper, loadPrograms, launcher, logger, claudeJobs, sessionLock, claudeFolders, notify = () => {}, setTimer = setTimeout, closeGraceMs = CLOSE_GRACE_MS,
+    inputHelper, loadPrograms, launcher, logger, claudeJobs, sessionLock, claudeFolders, claudeChats, notify = () => {},
+    setTimer = setTimeout, closeGraceMs = CLOSE_GRACE_MS,
 }) {
     async function helper(verb, argument) {
         const reply = await inputHelper.run(verb, argument);
@@ -129,7 +133,9 @@ function createInternalRunner({
         }
         if (status !== LockStatus.OK) return LOCK_RESULTS[status];
         // A pasta só é procurada DEPOIS do PIN: sem sessão ativa, nem os nomes dos projetos saem do PC.
-        const target = claudeFolders.resolve(params.ordem, params.projeto);
+        // Sem "no projeto …", a ordem vai para o chat vinculado (usado nas últimas 3 h), se houver.
+        const current = !namesProject(params.ordem) && !params.projeto ? claudeChats.activeCurrent() : undefined;
+        const target = current ? { status: FolderStatus.OK, folder: current.folder, order: params.ordem } : claudeFolders.resolve(params.ordem, params.projeto);
         if (target.status === FolderStatus.NO_DEFAULT) {
             notify('Marque uma pasta padrão do Claude Code (ícone do O Monstro → Claude Code → Editar lista de pastas).');
             return { ok: false };
@@ -137,8 +143,16 @@ function createInternalRunner({
         if (target.status !== FolderStatus.OK) {
             return { ok: false, status: target.status, choices: speakableChoices(target.choices || []) };
         }
+        const previous = claudeChats.previousFor(target.folder);
+        let sessionId;
+        if (!claudeJobs.isNewChatRequest(target.order) && previous) {
+            if (claudeChats.isActive(previous) || params.chat === CHAT_CHOICES.CONTINUE) sessionId = previous.sessionId;
+            else if (params.chat !== CHAT_CHOICES.NEW) return { ok: false, status: protocol.AckStatus.CHAT_CHOICE };
+        }
         try {
-            claudeJobs.order(target.order, target.folder);
+            // Renova as 3 h já no envio; o id definitivo (chat novo) chega quando o Claude responde.
+            if (sessionId) claudeChats.remember(target.folder, sessionId);
+            claudeJobs.order(target.order, target.folder, { sessionId, onSession: (id) => claudeChats.remember(target.folder, id) });
         } catch (error) {
             logger.warn({ event: 'claude_order_refused', code: error.code });
             if (error.code === 'no_project_folder') notify('A pasta do Claude Code não existe mais. Atualize a lista no ícone do O Monstro.');
@@ -149,6 +163,7 @@ function createInternalRunner({
 
     function endClaudeCodeSession() {
         sessionLock.revoke();
+        claudeChats.release();
         notify('Sessão do Claude Code encerrada. A próxima ordem vai pedir o PIN.');
         return { ok: true };
     }

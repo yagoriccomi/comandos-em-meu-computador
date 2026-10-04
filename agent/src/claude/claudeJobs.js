@@ -6,7 +6,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { QUESTION_ARGS, NEW_ORDER_ARGS, CONTINUE_ORDER_ARGS, ClaudeCliError, splitSummary } = require('./claudeCli');
+const { QUESTION_ARGS, NEW_ORDER_ARGS, resumeOrderArgs, ClaudeCliError, splitSummary } = require('./claudeCli');
 
 const QUESTION_TIMEOUT_MS = 5 * 60 * 1000;
 const ORDER_TIMEOUT_MS = 30 * 60 * 1000;
@@ -65,8 +65,10 @@ function createClaudeJobs({ cli, files, getPreferredExe = () => undefined, speak
         try {
             let reply = await cli.run({ ...request, preferredExe: getPreferredExe() });
             if (request.retryAsNew && reply.isError && NO_CONVERSATION.test(reply.result)) {
+                // O chat vinculado sumiu (apagado/limpo): abre um novo e o vínculo passa a ser ele.
                 reply = await cli.run({ ...request, args: NEW_ORDER_ARGS, preferredExe: getPreferredExe() });
             }
+            if (reply.sessionId && request.onSession) request.onSession(reply.sessionId);
             if (reply.isError) {
                 const code = NOT_LOGGED_IN.test(reply.result) ? 'not_logged_in' : 'claude_error';
                 logger.warn({ event: 'claude_failed', kind, code });
@@ -90,16 +92,21 @@ function createClaudeJobs({ cli, files, getPreferredExe = () => undefined, speak
             runJob('pergunta', { args: QUESTION_ARGS, prompt: question, cwd: files.questionsDir, timeoutMs: QUESTION_TIMEOUT_MS });
         },
 
-        /** Ordem ao Claude Code na pasta dada: continua a última conversa, ou abre uma nova ("novo chat, …"). */
-        order(text, folder) {
+        /**
+         * Ordem ao Claude Code na pasta dada: no chat vinculado (sessionId) ou num chat novo.
+         * @param {{ sessionId?: string, onSession?: (id: string) => void }} [chat]  onSession recebe o id do chat usado
+         */
+        order(text, folder, { sessionId, onSession } = {}) {
             if (!folder || !fs.existsSync(folder)) throw new ClaudeCliError('no_project_folder');
-            const isNewChat = NEW_CHAT_PREFIX.test(text);
-            const prompt = isNewChat ? text.replace(NEW_CHAT_PREFIX, '') : text;
+            const prompt = text.replace(NEW_CHAT_PREFIX, '');
             if (!prompt.trim()) throw new ClaudeCliError('empty_order');
             runJob('ordem', {
-                args: isNewChat ? NEW_ORDER_ARGS : CONTINUE_ORDER_ARGS, prompt, cwd: folder, timeoutMs: ORDER_TIMEOUT_MS, retryAsNew: !isNewChat,
+                args: sessionId ? resumeOrderArgs(sessionId) : NEW_ORDER_ARGS, prompt, cwd: folder, timeoutMs: ORDER_TIMEOUT_MS,
+                retryAsNew: Boolean(sessionId), onSession,
             });
         },
+
+        isNewChatRequest: (text) => NEW_CHAT_PREFIX.test(text),
 
         /** @returns {{ state: string, summary?: string }} */
         lastAnswer() {

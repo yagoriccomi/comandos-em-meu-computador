@@ -56,6 +56,8 @@ module.exports = Object.freeze({
     PIN_WRONG: 'PIN incorreto. Diga de novo, um número de cada vez.',
     CLAUDE_CODE_LOCKED: 'O Claude Code está bloqueado por tentativas erradas. Tente de novo em quinze minutos.',
     VOICE_NOT_RECOGNIZED: 'Não reconheci a sua voz para usar o Claude Code.',
+    ASK_CHAT_CHOICE: 'Faz mais de três horas desde a última ordem. Quer continuar o chat anterior do Claude Code ou começar um novo?',
+    CHAT_CHOICE_NOT_UNDERSTOOD: 'Diga continuar, para o chat anterior, ou novo, para começar outro.',
     /** Frase de sucesso específica de algumas ações (o resto diz "Feito."). */
     DONE_BY_ACTION: Object.freeze({
         perguntar_claude: 'Perguntei ao Claude. A resposta vai sair no computador.',

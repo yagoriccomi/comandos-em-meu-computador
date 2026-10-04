@@ -27,7 +27,9 @@ agent/         Agente Windows: `npm run build:pacote` → dist/O Monstro/ (node.
   src/desktop/scan-programs.ps1  detecta programas do menu Iniciar (só leitura)
   src/programs lista PRIVADA %LOCALAPPDATA%\OMonstro\programas.json (nunca no Git) + busca aproximada
   src/claude   Claude Code da ASSINATURA (`claude -p`, login do dono): perguntas (Sonnet, só WebSearch/WebFetch) e
-               ordens (pasta escolhida na bandeja; --continue ou "novo chat" com Opus/medium/auto). Assíncrono:
+               ordens (lista de pastas importada do histórico; "no projeto X"). Ordens ficam VINCULADAS ao mesmo chat
+               (--resume <session_id>) enquanto houver uso nas últimas 3 h; depois, a Alexa pergunta continuar/novo.
+               "novo chat, …" força chat novo (Opus/medium/auto). Verbos de programa nunca usam palavras das rotinas. Assíncrono:
                a resposta é falada pelo PC (speak.ps1, voz pt-BR) e o resumo volta no ack de "a resposta do Claude".
                Trava das ordens: PIN 6 dígitos (scrypt) → sessão de 3 h; "encerrar sessão" revoga; 5 erros = 15 min.
 scripts/deploy.ps1   deploy completo (testes → skill via ASK CLI/git push na Alexa-hosted → instalador). Manual: docs/DEPLOY.md

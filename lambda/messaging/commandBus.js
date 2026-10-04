@@ -17,6 +17,7 @@ const DeliveryResult = Object.freeze({
     PENDING: 'pending',
     PIN_REQUIRED: 'pin_required',
     LOCKED: 'locked',
+    CHAT_CHOICE: 'chat_choice',
 });
 
 const RESULT_BY_ACK_STATUS = Object.freeze({
@@ -27,6 +28,7 @@ const RESULT_BY_ACK_STATUS = Object.freeze({
     [protocol.AckStatus.PENDING]: DeliveryResult.PENDING,
     [protocol.AckStatus.PIN_REQUIRED]: DeliveryResult.PIN_REQUIRED,
     [protocol.AckStatus.LOCKED]: DeliveryResult.LOCKED,
+    [protocol.AckStatus.CHAT_CHOICE]: DeliveryResult.CHAT_CHOICE,
 });
 
 /**

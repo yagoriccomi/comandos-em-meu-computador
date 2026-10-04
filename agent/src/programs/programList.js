@@ -22,7 +22,8 @@ const VERB_PATTERN = /^[a-zà-ú ]{2,30}$/;
 const DEFAULT_VERBS = Object.freeze({
     abrir: Object.freeze(['abrir', 'executar', 'iniciar', 'rodar', 'ligar']),
     fechar: Object.freeze(['fechar', 'encerrar', 'sair']),
-    destravar: Object.freeze(['destravar', 'reabrir', 'reiniciar']),
+    // "reiniciar" fica de fora: "reiniciar o computador" é a rotina reiniciar_pc, não destravar um programa.
+    destravar: Object.freeze(['destravar', 'reabrir']),
 });
 
 /** Apelidos sugeridos na primeira detecção (o dono pode apagar ou trocar). Chave = nome normalizado. */
