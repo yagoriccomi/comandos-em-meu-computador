@@ -82,6 +82,12 @@ $refreshItem = $programsMenu.DropDownItems.Add('Atualizar lista de programas')
 $editItem = $programsMenu.DropDownItems.Add('Editar lista de programas')
 $routinesItem = $programsMenu.DropDownItems.Add('Gerar rotinas sugeridas do app Alexa')
 [void]$menu.Items.Add($programsMenu)
+$claudeMenu = New-Object System.Windows.Forms.ToolStripMenuItem 'Claude Code'
+$claudeAnswerItem = $claudeMenu.DropDownItems.Add('Abrir última resposta do Claude')
+$claudeFolderItem = $claudeMenu.DropDownItems.Add('Escolher pasta das ordens…')
+$claudePinItem = $claudeMenu.DropDownItems.Add('Definir PIN…')
+$claudeLockItem = $claudeMenu.DropDownItems.Add('Encerrar sessão (pede o PIN de novo)')
+[void]$menu.Items.Add($claudeMenu)
 $renameItem = $menu.Items.Add('Trocar nome de chamada…')
 $deployItem = $menu.Items.Add('Publicar atualização…')
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
@@ -101,6 +107,20 @@ $renameItem.add_Click({
         $AppName, '')
     $clean = ($name -replace '[\r\n]', ' ').Trim()
     if ($clean) { Send-Command "rename $clean" }
+})
+$claudeAnswerItem.add_Click({ Send-Command 'claude_answer' })
+$claudeLockItem.add_Click({ Send-Command 'claude_lock' })
+$claudeFolderItem.add_Click({
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    $dialog.Description = 'Pasta do projeto onde o Claude Code vai receber as ordens por voz'
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Send-Command "claude_folder $($dialog.SelectedPath)" }
+})
+$claudePinItem.add_Click({
+    $pin = [Microsoft.VisualBasic.Interaction]::InputBox(
+        "PIN de 6 digitos para o Claude Code (nao pode comecar com 0).`nA Alexa vai pedir este PIN a cada 3 horas.",
+        $AppName, '')
+    $digits = ($pin -replace '[^0-9]', '')
+    if ($digits) { Send-Command "claude_pin $digits" }
 })
 $deployItem.add_Click({
     $answer = [System.Windows.Forms.MessageBox]::Show(

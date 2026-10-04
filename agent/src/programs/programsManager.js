@@ -125,6 +125,23 @@ function createProgramsManager({ files, scanScript, execFile = childProcess.exec
             return name;
         },
 
+        /** Pasta onde o Claude Code recebe as ordens por voz (escolhida na bandeja). */
+        claudeFolder() {
+            const folder = (readJson(files.PREFERENCES_FILE) || {}).pastaClaudeCode;
+            return typeof folder === 'string' && path.win32.isAbsolute(folder) && fs.existsSync(folder) ? folder : undefined;
+        },
+
+        setClaudeFolder(folder) {
+            const value = String(folder || '').trim();
+            if (!path.win32.isAbsolute(value) || !fs.existsSync(value) || !fs.statSync(value).isDirectory()) {
+                throw new ProgramsManagerError('pasta inválida');
+            }
+            const preferences = readJson(files.PREFERENCES_FILE) || {};
+            fs.mkdirSync(path.dirname(files.PREFERENCES_FILE), { recursive: true });
+            fs.writeFileSync(files.PREFERENCES_FILE, `${JSON.stringify({ ...preferences, pastaClaudeCode: value }, null, 2)}\n`);
+            return value;
+        },
+
         writeRoutineSuggestions() {
             fs.mkdirSync(path.dirname(files.ROUTINES_FILE), { recursive: true });
             fs.writeFileSync(files.ROUTINES_FILE, buildRoutineSuggestions(this.load(), this.invocationName()), 'utf8');

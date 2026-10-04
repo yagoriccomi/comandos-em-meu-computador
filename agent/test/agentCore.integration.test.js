@@ -19,6 +19,7 @@ const localActions = buildLocalActions({ actions: [
     { id: 'abrir_netflix', executable: 'C:\\Windows\\explorer.exe', args: ['https://www.netflix.com'], enabled: true },
     { id: 'reiniciar_pc', enabled: false },
     { id: 'abrir_programa', interno: true, enabled: true },
+    { id: 'resposta_claude', interno: true, enabled: true },
 ] }, publicCatalog, { checkFileExists: false });
 
 async function startAgent({ paused = false, desktopResult = { ok: true } } = {}) {
@@ -116,4 +117,10 @@ test('shouldPassFreePhraseVerbToDesktop', async () => {
     const { alexa, desktopCalls } = await startAgent();
     await alexa('abrir_programa', { programa: 'x', verbo: '*', exato: 0 });
     assert.equal(desktopCalls[0].params.verbo, '*');
+});
+
+test('shouldCarryClaudeSummaryInSignedAck', async () => {
+    const { alexa } = await startAgent({ desktopResult: { ok: true, text: 'A capital é Canberra.' } });
+    const reply = await alexa('resposta_claude', {});
+    assert.deepEqual([reply.result, reply.text], [DeliveryResult.DONE, 'A capital é Canberra.']);
 });

@@ -66,7 +66,7 @@ async function main() {
 
     console.log('2/3 copiando o Node.js oficial e os arquivos de apoio…');
     fs.copyFileSync(process.execPath, path.join(APP_DIR, 'node.exe'));
-    for (const script of ['tray.ps1', 'input-helper.ps1', 'scan-programs.ps1']) {
+    for (const script of ['tray.ps1', 'input-helper.ps1', 'scan-programs.ps1', 'speak.ps1']) {
         const content = fs.readFileSync(path.join(AGENT_DIR, 'src', 'desktop', script), 'utf8');
         fs.writeFileSync(path.join(APP_DIR, script), content.startsWith(UTF8_BOM) ? content : `${UTF8_BOM}${content}`);
     }

@@ -6,12 +6,18 @@
 const net = require('net');
 const { protocol } = require('../shared');
 
-const LOOKUP_STATUSES = Object.freeze([protocol.AckStatus.AMBIGUOUS, protocol.AckStatus.NOT_FOUND]);
+const DETAILED_STATUSES = Object.freeze([
+    protocol.AckStatus.AMBIGUOUS, protocol.AckStatus.NOT_FOUND, protocol.AckStatus.PENDING, protocol.AckStatus.PIN_REQUIRED, protocol.AckStatus.LOCKED,
+]);
 
-/** Resultado vindo da sessão: ok, ou ambiguous/not_found com opções que o protocolo aceita. */
+function isValidSpeechText(text) {
+    return typeof text === 'string' && text.length > 0 && text.length <= protocol.MAX_ACK_TEXT_LENGTH && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(text);
+}
+
+/** Resultado vindo da sessão: ok (com resumo opcional), ou um status detalhado com opções que o protocolo aceita. */
 function sanitizeResult(message) {
-    if (message.ok === true) return { ok: true };
-    if (!LOOKUP_STATUSES.includes(message.status)) return { ok: false };
+    if (message.ok === true) return isValidSpeechText(message.text) ? { ok: true, text: message.text } : { ok: true };
+    if (!DETAILED_STATUSES.includes(message.status)) return { ok: false };
     const choices = Array.isArray(message.choices)
         ? message.choices.filter((choice) => protocol.isValidTextParam(choice) && choice.length <= protocol.MAX_CHOICE_LENGTH)
             .slice(0, protocol.MAX_ACK_CHOICES)

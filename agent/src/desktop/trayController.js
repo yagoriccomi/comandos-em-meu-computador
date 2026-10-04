@@ -21,8 +21,12 @@ const TrayCommand = Object.freeze({
     RENAME: 'rename',
     ROUTINES: 'routines',
     DEPLOY: 'deploy',
+    CLAUDE_SET_PIN: 'claude_pin',
+    CLAUDE_FOLDER: 'claude_folder',
+    CLAUDE_ANSWER: 'claude_answer',
+    CLAUDE_LOCK: 'claude_lock',
 });
-const MAX_ARGUMENT_LENGTH = 80;
+const MAX_ARGUMENT_LENGTH = 260; // caminho de pasta (Escolher pasta do Claude Code)
 
 /**
  * @param {object} deps

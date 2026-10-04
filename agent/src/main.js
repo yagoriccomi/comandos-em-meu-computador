@@ -27,6 +27,9 @@ const { createInputHelper } = require('./desktop/inputHelper');
 const { createInternalRunner } = require('./internal/internalActions');
 const { createLauncher } = require('./internal/launcher');
 const { createProgramsManager } = require('./programs/programsManager');
+const { createClaudeCli } = require('./claude/claudeCli');
+const { createClaudeJobs } = require('./claude/claudeJobs');
+const { createSessionLock } = require('./claude/sessionLock');
 const { isPackagedInstall, DEV_ASSET_PATHS, assetPath } = require('./assets');
 
 const VERSION = '2.0.0';
@@ -120,9 +123,42 @@ function startDeploy(statusWriter, state) {
     child.unref();
 }
 
-function createMenuActions({ programs, statusWriter, session, logger }) {
+/** Voz do Windows: o texto vai pelo STDIN do speak.ps1 (nunca como argumento). */
+function createSpeaker(logger) {
+    const script = assetPath('speak.ps1', paths.SPEAK_SCRIPT);
+    return (text) => {
+        const child = childProcess.spawn(POWERSHELL_EXE, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], {
+            shell: false, windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'],
+        });
+        child.on('error', (error) => logger.warn({ event: 'speak_failed', errorCode: error.code }));
+        child.stdin.end(text, 'utf8');
+    };
+}
+
+function createMenuActions({ programs, statusWriter, session, logger, sessionLock }) {
     const notify = (text) => statusWriter.notify(text, session.getState());
     return {
+        [TrayCommand.CLAUDE_ANSWER]: () => (fs.existsSync(paths.CLAUDE_ANSWER_TEXT_FILE)
+            ? openInNotepad(paths.CLAUDE_ANSWER_TEXT_FILE) : notify('Ainda não há resposta do Claude.')),
+        [TrayCommand.CLAUDE_LOCK]: () => {
+            sessionLock.revoke();
+            notify('Sessão do Claude Code encerrada. A próxima ordem vai pedir o PIN.');
+        },
+        [TrayCommand.CLAUDE_FOLDER]: (folder) => {
+            try {
+                notify(`Ordens do Claude Code vão para: ${programs.setClaudeFolder(folder)}`);
+            } catch (error) {
+                notify('Não consegui usar essa pasta.');
+            }
+        },
+        [TrayCommand.CLAUDE_SET_PIN]: (pin) => {
+            try {
+                sessionLock.setPin(pin);
+                notify('PIN do Claude Code definido. A Alexa vai pedir este PIN a cada 3 horas.');
+            } catch (error) {
+                notify(error.message);
+            }
+        },
         [TrayCommand.PROGRAMS_REFRESH]: async () => {
             notify('Procurando programas no menu Iniciar…');
             try {
@@ -155,10 +191,25 @@ function runDesktop() {
         files: paths,
         scanScript: assetPath('scan-programs.ps1', paths.SCAN_PROGRAMS_SCRIPT),
     });
+    // A sessão (abaixo) ainda não existe aqui: o balão usa o último estado conhecido.
+    let currentSession;
+    const notify = (text) => statusWriter.notify(text, currentSession ? currentSession.getState() : undefined);
+    const sessionLock = createSessionLock({ filePath: paths.CLAUDE_LOCK_FILE });
+    const claudeJobs = createClaudeJobs({
+        cli: createClaudeCli(),
+        files: { answerFile: paths.CLAUDE_ANSWER_FILE, answerTextFile: paths.CLAUDE_ANSWER_TEXT_FILE, questionsDir: paths.CLAUDE_QUESTIONS_DIR },
+        getProjectFolder: () => programs.claudeFolder(),
+        speak: createSpeaker(logger),
+        notify,
+        logger,
+    });
     const internalRunner = createInternalRunner({
         inputHelper: createInputHelper({ scriptPath: assetPath('input-helper.ps1', paths.INPUT_HELPER_SCRIPT), logger }),
         loadPrograms: () => programs.load(),
         launcher: createLauncher({ logger }),
+        claudeJobs,
+        sessionLock,
+        notify,
         logger,
     });
     const session = createDesktopSession({
@@ -169,6 +220,7 @@ function runDesktop() {
         statusWriter,
         logger,
     });
+    currentSession = session;
     session.start();
     // Primeira execução: cria a lista privada sozinha (o dono depois edita pelo menu).
     if (!fs.existsSync(paths.PROGRAMS_FILE)) {
@@ -180,7 +232,7 @@ function runDesktop() {
         logFile: path.join(paths.LOG_DIR, 'agent.log'),
         session,
         logger,
-        menuActions: createMenuActions({ programs, statusWriter, session, logger }),
+        menuActions: createMenuActions({ programs, statusWriter, session, logger, sessionLock }),
         onExit: () => {
             session.stop();
             process.exit(0);

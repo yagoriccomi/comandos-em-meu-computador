@@ -80,7 +80,7 @@ function createDesktopSession({ endpointFile, pipeSecret, localActions, executor
             logger.warn({ event: 'desktop_action_refused', actionId: message.actionId });
         }
         if (channel) {
-            channel.send({ type: ChannelMessage.RESULT, id: message.id, ok: result.ok === true, status: result.status, choices: result.choices });
+            channel.send({ type: ChannelMessage.RESULT, id: message.id, ok: result.ok === true, status: result.status, choices: result.choices, text: result.text });
         }
     }
 
