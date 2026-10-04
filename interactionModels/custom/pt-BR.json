@@ -35,17 +35,24 @@
           "name": "AbrirAplicativoIntent",
           "slots": [
             {
+              "name": "verbo",
+              "type": "TIPO_VERBO"
+            },
+            {
               "name": "aplicativo",
               "type": "TIPO_APLICATIVO"
             }
           ],
           "samples": [
-            "abrir {aplicativo}",
-            "abre {aplicativo}",
-            "abra {aplicativo}",
-            "iniciar {aplicativo}",
+            "{verbo} {aplicativo}",
+            "{verbo} o {aplicativo}",
+            "{verbo} a {aplicativo}",
+            "{verbo} os {aplicativo}",
+            "{verbo} as {aplicativo}",
+            "{verbo} o programa {aplicativo}",
+            "{verbo} o aplicativo {aplicativo}",
             "colocar {aplicativo}",
-            "liga {aplicativo}"
+            "quero {aplicativo}"
           ]
         },
         {
@@ -250,12 +257,10 @@
             }
           ],
           "samples": [
-            "fechar {aplicativo}",
-            "fecha {aplicativo}",
-            "feche {aplicativo}",
-            "encerrar {aplicativo}",
-            "encerra {aplicativo}",
-            "sair do {aplicativo}"
+            "fechar tudo do {aplicativo}",
+            "acabar com o {aplicativo}",
+            "mata o {aplicativo}",
+            "matar o {aplicativo}"
           ]
         },
         {
@@ -267,12 +272,30 @@
             }
           ],
           "samples": [
-            "destravar {aplicativo}",
-            "destrava {aplicativo}",
-            "destrave {aplicativo}",
-            "reabrir {aplicativo}",
-            "reabre {aplicativo}",
-            "reiniciar o programa {aplicativo}"
+            "o {aplicativo} travou",
+            "a {aplicativo} travou",
+            "{aplicativo} travou",
+            "o {aplicativo} está travado",
+            "{aplicativo} congelou"
+          ]
+        },
+        {
+          "name": "EscolhaIntent",
+          "slots": [
+            {
+              "name": "escolha",
+              "type": "TIPO_ESCOLHA"
+            }
+          ],
+          "samples": [
+            "o {escolha}",
+            "a {escolha}",
+            "opção {escolha}",
+            "número {escolha}",
+            "quero o {escolha}",
+            "quero a {escolha}",
+            "é o {escolha}",
+            "é a {escolha}"
           ]
         }
       ],
@@ -288,6 +311,96 @@
                   "a netflix",
                   "o netflix"
                 ]
+              }
+            },
+            {
+              "id": "exemplo_1",
+              "name": {
+                "value": "discord"
+              }
+            },
+            {
+              "id": "exemplo_2",
+              "name": {
+                "value": "google chrome"
+              }
+            },
+            {
+              "id": "exemplo_3",
+              "name": {
+                "value": "microsoft edge"
+              }
+            },
+            {
+              "id": "exemplo_4",
+              "name": {
+                "value": "steam"
+              }
+            },
+            {
+              "id": "exemplo_5",
+              "name": {
+                "value": "spotify"
+              }
+            },
+            {
+              "id": "exemplo_6",
+              "name": {
+                "value": "whatsapp"
+              }
+            },
+            {
+              "id": "exemplo_7",
+              "name": {
+                "value": "visual studio code"
+              }
+            },
+            {
+              "id": "exemplo_8",
+              "name": {
+                "value": "photoshop"
+              }
+            },
+            {
+              "id": "exemplo_9",
+              "name": {
+                "value": "epic games"
+              }
+            },
+            {
+              "id": "exemplo_10",
+              "name": {
+                "value": "minecraft"
+              }
+            },
+            {
+              "id": "exemplo_11",
+              "name": {
+                "value": "bloco de notas"
+              }
+            },
+            {
+              "id": "exemplo_12",
+              "name": {
+                "value": "calculadora"
+              }
+            },
+            {
+              "id": "exemplo_13",
+              "name": {
+                "value": "gerenciador de tarefas"
+              }
+            },
+            {
+              "id": "exemplo_14",
+              "name": {
+                "value": "explorador de arquivos"
+              }
+            },
+            {
+              "id": "exemplo_15",
+              "name": {
+                "value": "obs studio"
               }
             }
           ]
@@ -415,6 +528,159 @@
                   "pular o início",
                   "pular a introdução",
                   "pular"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TIPO_VERBO",
+          "values": [
+            {
+              "id": "abrir",
+              "name": {
+                "value": "abrir",
+                "synonyms": [
+                  "abre",
+                  "abra"
+                ]
+              }
+            },
+            {
+              "id": "executar",
+              "name": {
+                "value": "executar",
+                "synonyms": [
+                  "executa",
+                  "execute"
+                ]
+              }
+            },
+            {
+              "id": "iniciar",
+              "name": {
+                "value": "iniciar",
+                "synonyms": [
+                  "inicia",
+                  "inicie"
+                ]
+              }
+            },
+            {
+              "id": "rodar",
+              "name": {
+                "value": "rodar",
+                "synonyms": [
+                  "roda",
+                  "rode"
+                ]
+              }
+            },
+            {
+              "id": "ligar",
+              "name": {
+                "value": "ligar",
+                "synonyms": [
+                  "liga",
+                  "ligue"
+                ]
+              }
+            },
+            {
+              "id": "fechar",
+              "name": {
+                "value": "fechar",
+                "synonyms": [
+                  "fecha",
+                  "feche"
+                ]
+              }
+            },
+            {
+              "id": "encerrar",
+              "name": {
+                "value": "encerrar",
+                "synonyms": [
+                  "encerra",
+                  "encerre"
+                ]
+              }
+            },
+            {
+              "id": "sair",
+              "name": {
+                "value": "sair",
+                "synonyms": [
+                  "sai",
+                  "sair do",
+                  "sair da"
+                ]
+              }
+            },
+            {
+              "id": "destravar",
+              "name": {
+                "value": "destravar",
+                "synonyms": [
+                  "destrava",
+                  "destrave"
+                ]
+              }
+            },
+            {
+              "id": "reabrir",
+              "name": {
+                "value": "reabrir",
+                "synonyms": [
+                  "reabre",
+                  "reabra"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TIPO_ESCOLHA",
+          "values": [
+            {
+              "id": "1",
+              "name": {
+                "value": "primeiro",
+                "synonyms": [
+                  "primeira",
+                  "o primeiro",
+                  "a primeira",
+                  "um",
+                  "número um",
+                  "opção um"
+                ]
+              }
+            },
+            {
+              "id": "2",
+              "name": {
+                "value": "segundo",
+                "synonyms": [
+                  "segunda",
+                  "o segundo",
+                  "a segunda",
+                  "dois",
+                  "número dois",
+                  "opção dois"
+                ]
+              }
+            },
+            {
+              "id": "3",
+              "name": {
+                "value": "terceiro",
+                "synonyms": [
+                  "terceira",
+                  "o terceiro",
+                  "a terceira",
+                  "três",
+                  "número três",
+                  "opção três"
                 ]
               }
             }

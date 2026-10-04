@@ -50,7 +50,9 @@ async function buildSkill({ secrets = SECRETS, agentStatus } = {}) {
         await agent.subscribe(protocol.commandTopic(secrets.deviceId), async (raw) => {
             const command = protocol.verify(protocol.parse(raw), { secret: secrets.hmacSecret, expectedType: protocol.MessageType.COMMAND });
             executed.push({ actionId: command.actionId, params: command.params });
-            const ack = protocol.createAck({ requestId: command.requestId, status: agentStatus }, secrets.hmacSecret);
+            // agentStatus: 'ok' | 'error' ou função (command) => { status, choices } para simular a busca de programas.
+            const reply = typeof agentStatus === 'function' ? agentStatus(command) : { status: agentStatus };
+            const ack = protocol.createAck({ requestId: command.requestId, ...reply }, secrets.hmacSecret);
             await agent.publish(protocol.ackTopic(secrets.deviceId), protocol.serialize(ack));
         });
     }
@@ -80,13 +82,13 @@ test('shouldSayCouldNotWhenAgentReportsError', async () => {
     assert.equal(speechOf(response), 'Não consegui executar essa ação.');
 });
 
-test('shouldSayUnknownAndSendNothingForUnmatchedSlot', async () => {
-    const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
+test('shouldSendUnmatchedAppNameToPcAsText', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: 'ok' });
     const slots = { aplicativo: { name: 'aplicativo', value: 'powershell', resolutions: { resolutionsPerAuthority: [
         { authority: 'a', status: { code: 'ER_SUCCESS_NO_MATCH' } }] } } };
     const response = await skill.invoke(intentRequest('AbrirAplicativoIntent', slots));
-    assert.equal(speechOf(response), 'Não conheço essa ação.');
-    assert.equal(broker.published.length, 0);
+    assert.equal(speechOf(response), 'Feito.');
+    assert.deepEqual(executed, [{ actionId: 'abrir_programa', params: { programa: 'powershell', verbo: 'abrir', exato: 0 } }]);
 });
 
 const SHUTDOWN_30 = { minutos: { name: 'minutos', value: '30' } };
@@ -243,8 +245,63 @@ test('shouldRaiseVolumeByDefaultStep', async () => {
     assert.deepEqual(executed, [{ actionId: 'aumentar_volume', params: { quantidade: 20 } }]);
 });
 
-test('shouldCloseProgramFromPrivateList', async () => {
+test('shouldCloseProgramByName', async () => {
     const { skill, executed } = await buildSkill({ agentStatus: 'ok' });
-    await skill.invoke(intentRequest('FecharAplicativoIntent', matchedSlot('aplicativo', 'edge', 'p00112233aabb')));
-    assert.deepEqual(executed, [{ actionId: 'fechar_programa', params: { programa: 'p00112233aabb' } }]);
+    await skill.invoke(intentRequest('FecharAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'edge' } }));
+    assert.deepEqual(executed, [{ actionId: 'fechar_programa', params: { programa: 'edge', verbo: 'fechar', exato: 0 } }]);
+});
+
+// ---- Diálogo "qual deles?" (o PC achou vários programas parecidos) ----
+function cloudflareAgent(command) {
+    if (command.params.exato === 1) return { status: 'ok' };
+    return { status: 'ambiguous', choices: ['Cloudflare WARP', 'Cloudflare One'] };
+}
+
+test('shouldAskWhichProgramAndOpenTheOneChosenByOrdinal', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: cloudflareAgent });
+    const question = await skill.invoke(intentRequest('AbrirAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'cloudflare' } }));
+    assert.equal(speechOf(question), 'Encontrei Cloudflare WARP e Cloudflare One. Qual deles?');
+    assert.equal(question.response.shouldEndSession, false);
+    const answer = await skill.invoke(followUp(question, 'EscolhaIntent', { escolha: { name: 'escolha', value: 'o segundo' } }));
+    assert.equal(speechOf(answer), 'Feito.');
+    assert.deepEqual(executed[1], { actionId: 'abrir_programa', params: { programa: 'Cloudflare One', verbo: 'abrir', exato: 1 } });
+});
+
+test('shouldAcceptProgramNameAsAnswerThroughAnyIntent', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: cloudflareAgent });
+    const question = await skill.invoke(intentRequest('AbrirAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'cloudflare' } }));
+    await skill.invoke(followUp(question, 'ExecutarRotinaIntent', { rotina: { name: 'rotina', value: 'cloudflare warp' } }));
+    assert.equal(executed[1].params.programa, 'Cloudflare WARP');
+});
+
+test('shouldOfferSimilarProgramAndAcceptYes', async () => {
+    const agent = (command) => (command.params.exato === 1 ? { status: 'ok' } : { status: 'not_found', choices: ['Discord'] });
+    const { skill, executed } = await buildSkill({ agentStatus: agent });
+    const question = await skill.invoke(intentRequest('AbrirAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'discordi' } }));
+    assert.equal(speechOf(question), 'Não achei esse programa. Você quis dizer Discord?');
+    const answer = await skill.invoke(followUp(question, 'AMAZON.YesIntent'));
+    assert.equal(speechOf(answer), 'Feito.');
+    assert.equal(executed[1].params.programa, 'Discord');
+});
+
+test('shouldSayNotFoundWhenPcHasNoSimilarProgram', async () => {
+    const { skill } = await buildSkill({ agentStatus: () => ({ status: 'not_found', choices: [] }) });
+    const response = await skill.invoke(intentRequest('AbrirAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'xyz' } }));
+    assert.equal(speechOf(response), 'Não achei esse programa no computador.');
+});
+
+test('shouldNotExecuteWhenChoiceIsNotUnderstoodOrCancelled', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: cloudflareAgent });
+    const question = await skill.invoke(intentRequest('AbrirAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'cloudflare' } }));
+    const unclear = await skill.invoke(followUp(question, 'EscolhaIntent', { escolha: { name: 'escolha', value: 'banana' } }));
+    assert.equal(speechOf(unclear), 'Não entendi qual deles. Peça de novo, por favor.');
+    const cancelled = await skill.invoke(followUp(question, 'AMAZON.NoIntent'));
+    assert.equal(speechOf(cancelled), 'Tudo bem, não fiz nada.');
+    assert.equal(executed.length, 1, 'só a primeira tentativa chegou ao PC');
+});
+
+test('shouldEscapeProgramNamesInSpeech', async () => {
+    const { skill } = await buildSkill({ agentStatus: () => ({ status: 'ambiguous', choices: ['AT&T <Beta>', 'Outro'] }) });
+    const response = await skill.invoke(intentRequest('AbrirAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'at' } }));
+    assert.equal(speechOf(response), 'Encontrei AT&amp;T &lt;Beta&gt; e Outro. Qual deles?');
 });

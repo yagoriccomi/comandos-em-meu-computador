@@ -2,6 +2,22 @@
 /* Todas as frases faladas pela skill. A Alexa nunca fala detalhe técnico ou mensagem de erro. */
 const SECONDS_PER_HOUR = 3600;
 
+/** Nomes vindos do PC entram no SSML: escapar evita quebrar a fala (ex.: "AT&T"). */
+function escapeSsml(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** ["A", "B", "C"] → "A, B e C" (já escapado). */
+function joinNames(names, conjunction) {
+    const escaped = names.map(escapeSsml);
+    return escaped.length <= 1 ? escaped.join('') : `${escaped.slice(0, -1).join(', ')} ${conjunction} ${escaped[escaped.length - 1]}`;
+}
+
+const ASK_BY_NAME = Object.freeze({
+    consulta: 'O que você quer pesquisar?',
+    programa: 'Qual programa?',
+});
+
 function formatSeconds(totalSeconds) {
     if (totalSeconds >= SECONDS_PER_HOUR && totalSeconds % SECONDS_PER_HOUR === 0) {
         const hours = totalSeconds / SECONDS_PER_HOUR;
@@ -12,7 +28,7 @@ function formatSeconds(totalSeconds) {
 
 const ASK_BY_TYPE = Object.freeze({
     duration: () => 'Quanto tempo? Diga, por exemplo: 30 segundos ou 2 minutos.',
-    text: () => 'O que você quer pesquisar?',
+    text: (param) => ASK_BY_NAME[param.name] || 'Pode repetir, por favor?',
     integer: (param) => `Em quantos ${param.unit || param.name}? Diga, por exemplo: 30 ${param.unit || param.name}.`,
 });
 
@@ -32,6 +48,10 @@ module.exports = Object.freeze({
     CANCELLED_BY_USER: 'Tudo bem, não fiz nada.',
     GOODBYE: 'Até mais.',
     CONFIRMATION_EXPIRED: 'Demorou demais para confirmar. Peça de novo, por favor.',
+    PROGRAM_NOT_FOUND: 'Não achei esse programa no computador.',
+    CHOICE_NOT_UNDERSTOOD: 'Não entendi qual deles. Peça de novo, por favor.',
+    whichOne: (choices) => `Encontrei ${joinNames(choices, 'e')}. Qual deles?`,
+    didYouMean: (choices) => `Não achei esse programa. Você quis dizer ${joinNames(choices, 'ou')}?`,
     askForParam: (param) => (ASK_BY_TYPE[param.type] || ASK_BY_TYPE.integer)(param),
     invalidParam: (param) => (INVALID_BY_TYPE[param.type] || INVALID_BY_TYPE.integer)(param),
     confirmAction: (action, params) => {

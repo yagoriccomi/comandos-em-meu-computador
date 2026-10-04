@@ -16,7 +16,10 @@ const MIN_SECRET_LENGTH = 32;
 const TOPIC_PREFIX = 'omonstro';
 
 const MessageType = Object.freeze({ COMMAND: 'cmd', ACK: 'ack' });
-const AckStatus = Object.freeze({ OK: 'ok', ERROR: 'error' });
+/** ambiguous/not_found: o PC achou vários programas parecidos ou nenhum; "choices" traz até 3 nomes para a Alexa falar. */
+const AckStatus = Object.freeze({ OK: 'ok', ERROR: 'error', AMBIGUOUS: 'ambiguous', NOT_FOUND: 'not_found' });
+const MAX_ACK_CHOICES = 3;
+const MAX_CHOICE_LENGTH = 60;
 
 const ACTION_ID_PATTERN = /^[a-z0-9_]{1,64}$/;
 const PARAM_NAME_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
@@ -94,6 +97,13 @@ function isValidParams(params) {
     return entries.every(([name, value]) => PARAM_NAME_PATTERN.test(name) && isValidParamValue(value));
 }
 
+function isValidChoices(choices) {
+    if (choices === undefined) return true;
+    return Array.isArray(choices)
+        && choices.length <= MAX_ACK_CHOICES
+        && choices.every((choice) => isValidTextParam(choice) && choice.length <= MAX_CHOICE_LENGTH);
+}
+
 function hasValidShape(message) {
     if (!isPlainObject(message)) return false;
     if (!UUID_PATTERN.test(message.requestId || '')) return false;
@@ -102,7 +112,7 @@ function hasValidShape(message) {
         return ACTION_ID_PATTERN.test(message.actionId || '') && isValidParams(message.params);
     }
     if (message.type === MessageType.ACK) {
-        return Object.values(AckStatus).includes(message.status);
+        return Object.values(AckStatus).includes(message.status) && isValidChoices(message.choices);
     }
     return false;
 }
@@ -113,8 +123,9 @@ function createCommand({ actionId, params = {} }, secret, now = Date.now()) {
     return { ...message, sig: computeSignature(message, secret) };
 }
 
-function createAck({ requestId, status }, secret, now = Date.now()) {
+function createAck({ requestId, status, choices }, secret, now = Date.now()) {
     const message = { v: PROTOCOL_VERSION, type: MessageType.ACK, requestId, status, ts: now };
+    if (choices !== undefined) message.choices = choices;
     if (!hasValidShape(message)) throw new ProtocolError('malformed');
     return { ...message, sig: computeSignature(message, secret) };
 }
@@ -173,6 +184,8 @@ module.exports = {
     isValidTextParam,
     MessageType,
     AckStatus,
+    MAX_ACK_CHOICES,
+    MAX_CHOICE_LENGTH,
     ProtocolError,
     ACTION_ID_PATTERN,
     DEVICE_ID_PATTERN,

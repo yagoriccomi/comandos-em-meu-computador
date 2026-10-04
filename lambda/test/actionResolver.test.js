@@ -36,19 +36,13 @@ test('shouldMapRoutineSlotToActionId', () => {
     assert.equal(result.action.id, 'backup_documentos');
 });
 
-test('shouldRejectSpokenValueWithoutCatalogMatch', () => {
-    const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', 'cmd /c del', undefined) }, catalog);
-    assert.deepEqual(result, { ok: false, reason: ResolutionFailure.UNKNOWN_ACTION });
-});
-
-test('shouldRejectEntityIdThatIsNotInCatalog', () => {
-    const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', 'x', 'formatar_disco') }, catalog);
-    assert.equal(result.reason, ResolutionFailure.UNKNOWN_ACTION);
-});
-
-test('shouldRejectActionFromAnotherSlotType', () => {
-    const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', 'reiniciar', 'reiniciar_pc') }, catalog);
-    assert.equal(result.reason, ResolutionFailure.UNKNOWN_ACTION);
+test('shouldSendUnknownAppNameToPcAsTextOnly', () => {
+    // O PC só COMPARA o texto com a lista privada; nada vira comando. Nem ids de outro tipo viram ação do catálogo.
+    for (const [spoken, entityId] of [['cmd /c del', undefined], ['x', 'formatar_disco'], ['reiniciar', 'reiniciar_pc']]) {
+        const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', spoken, entityId) }, catalog);
+        assert.equal(result.action.id, 'abrir_programa', spoken);
+        assert.deepEqual(result.params, { programa: spoken, verbo: 'abrir', exato: 0 });
+    }
 });
 
 test('shouldRejectUnknownIntent', () => {
@@ -126,16 +120,22 @@ test('shouldKeepSearchTextAndRejectLongOrControlText', () => {
     }
 });
 
-test('shouldMapPrivateProgramToOpenCloseAndUnlockActions', () => {
-    const slots = slotWithMatch('aplicativo', 'discord', PROGRAM_ID);
-    for (const [intentName, actionId] of [
-        ['AbrirAplicativoIntent', 'abrir_programa'],
-        ['FecharAplicativoIntent', 'fechar_programa'],
-        ['DestravarAplicativoIntent', 'destravar_programa'],
+test('shouldSendProgramNameAndCanonicalVerbForOpenCloseAndUnlock', () => {
+    const verbSlot = (spoken, id) => slotWithMatch('verbo', spoken, id);
+    for (const [intentName, actionId, verbo] of [
+        ['AbrirAplicativoIntent', 'abrir_programa', 'executar'],
+        ['FecharAplicativoIntent', 'fechar_programa', 'encerrar'],
+        ['DestravarAplicativoIntent', 'destravar_programa', 'destravar'],
     ]) {
+        const slots = { ...slotWithMatch('aplicativo', 'epic', undefined), ...verbSlot('x', verbo) };
         const result = resolveIntent(intentWith(intentName, slots), catalog);
-        assert.deepEqual([result.action.id, result.params], [actionId, { programa: PROGRAM_ID }], intentName);
+        assert.deepEqual([result.action.id, result.params], [actionId, { programa: 'epic', verbo, exato: 0 }], intentName);
     }
+});
+
+test('shouldUseDefaultVerbWhenSentenceHasNoVerbSlot', () => {
+    const result = resolveIntent(intentWith('FecharAplicativoIntent', slotWithMatch('aplicativo', 'edge', undefined)), catalog);
+    assert.equal(result.params.verbo, 'fechar');
 });
 
 test('shouldStillOpenCatalogAppThroughAppIntent', () => {
@@ -143,16 +143,32 @@ test('shouldStillOpenCatalogAppThroughAppIntent', () => {
     assert.equal(result.action.id, 'abrir_netflix');
 });
 
-test('shouldNotCloseCatalogAppOrUnknownProgram', () => {
-    for (const slots of [slotWithMatch('aplicativo', 'netflix', 'abrir_netflix'), slotWithMatch('aplicativo', 'xyz', undefined),
-        slotWithMatch('aplicativo', 'x', 'p12; del'), { aplicativo: { name: 'aplicativo' } }]) {
-        const result = resolveIntent(intentWith('FecharAplicativoIntent', slots), catalog);
-        assert.equal(result.reason, ResolutionFailure.UNKNOWN_ACTION);
-    }
+test('shouldSendFreePhraseToPcWithAnyVerb', () => {
+    const result = resolveIntent(intentWith('ExecutarRotinaIntent', slotWithMatch('rotina', 'alterna para a tv', undefined)), catalog);
+    assert.deepEqual([result.action.id, result.params], ['abrir_programa', { programa: 'alterna para a tv', verbo: '*', exato: 0 }]);
+    const routine = resolveIntent(intentWith('ExecutarRotinaIntent', slotWithMatch('rotina', 'pausar', 'pausar_continuar')), catalog);
+    assert.equal(routine.action.id, 'pausar_continuar');
+});
+
+test('shouldAskWhichProgramWhenNameIsMissing', () => {
+    const result = resolveIntent(intentWith('FecharAplicativoIntent', { aplicativo: { name: 'aplicativo' } }), catalog);
+    assert.equal(result.reason, ResolutionFailure.MISSING_PARAM);
 });
 
 test('shouldRevalidatePendingTextAndProgramValues', () => {
     // As ações de texto/programa não pedem confirmação: pendência forjada com elas é recusada.
     const forged = resolvePendingAction({ actionId: 'pesquisar_google', params: { consulta: 'x' } }, catalog);
     assert.equal(forged.reason, ResolutionFailure.UNKNOWN_ACTION);
+});
+
+test('shouldPickProgramActionBySpokenVerbInTheSameIntent', () => {
+    const slots = (verb) => ({ ...slotWithMatch('aplicativo', 'edge', undefined), ...slotWithMatch('verbo', verb, verb) });
+    for (const [verb, actionId] of [['executar', 'abrir_programa'], ['fechar', 'fechar_programa'], ['reabrir', 'destravar_programa']]) {
+        const result = resolveIntent(intentWith('AbrirAplicativoIntent', slots(verb)), catalog);
+        assert.deepEqual([result.action.id, result.params.verbo], [actionId, verb]);
+    }
+    const closeNetflix = resolveIntent(intentWith('AbrirAplicativoIntent', {
+        ...slotWithMatch('aplicativo', 'netflix', 'abrir_netflix'), ...slotWithMatch('verbo', 'fecha', 'fechar'),
+    }), catalog);
+    assert.deepEqual([closeNetflix.action.id, closeNetflix.params.programa], ['fechar_programa', 'netflix']);
 });

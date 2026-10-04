@@ -281,7 +281,7 @@
         },
         {
             "id": "abrir_programa",
-            "description": "Abre um programa da lista privada do PC",
+            "description": "Abre um programa da lista privada do PC (o PC procura pelo nome falado)",
             "spokenName": "abrir o programa",
             "intent": "AbrirAplicativoIntent",
             "requiresConfirmation": false,
@@ -290,7 +290,22 @@
                 {
                     "name": "programa",
                     "slot": "aplicativo",
-                    "type": "program"
+                    "type": "text",
+                    "maxLength": 100
+                },
+                {
+                    "name": "verbo",
+                    "slot": "verbo",
+                    "type": "verb",
+                    "default": "abrir"
+                },
+                {
+                    "name": "exato",
+                    "slot": "exato",
+                    "type": "integer",
+                    "min": 0,
+                    "max": 1,
+                    "default": 0
                 }
             ]
         },
@@ -305,7 +320,22 @@
                 {
                     "name": "programa",
                     "slot": "aplicativo",
-                    "type": "program"
+                    "type": "text",
+                    "maxLength": 100
+                },
+                {
+                    "name": "verbo",
+                    "slot": "verbo",
+                    "type": "verb",
+                    "default": "fechar"
+                },
+                {
+                    "name": "exato",
+                    "slot": "exato",
+                    "type": "integer",
+                    "min": 0,
+                    "max": 1,
+                    "default": 0
                 }
             ]
         },
@@ -320,9 +350,90 @@
                 {
                     "name": "programa",
                     "slot": "aplicativo",
-                    "type": "program"
+                    "type": "text",
+                    "maxLength": 100
+                },
+                {
+                    "name": "verbo",
+                    "slot": "verbo",
+                    "type": "verb",
+                    "default": "destravar"
+                },
+                {
+                    "name": "exato",
+                    "slot": "exato",
+                    "type": "integer",
+                    "min": 0,
+                    "max": 1,
+                    "default": 0
                 }
             ]
         }
+    ],
+    "verbs": {
+        "abrir": {
+            "abrir": [
+                "abre",
+                "abra"
+            ],
+            "executar": [
+                "executa",
+                "execute"
+            ],
+            "iniciar": [
+                "inicia",
+                "inicie"
+            ],
+            "rodar": [
+                "roda",
+                "rode"
+            ],
+            "ligar": [
+                "liga",
+                "ligue"
+            ]
+        },
+        "fechar": {
+            "fechar": [
+                "fecha",
+                "feche"
+            ],
+            "encerrar": [
+                "encerra",
+                "encerre"
+            ],
+            "sair": [
+                "sai",
+                "sair do",
+                "sair da"
+            ]
+        },
+        "destravar": {
+            "destravar": [
+                "destrava",
+                "destrave"
+            ],
+            "reabrir": [
+                "reabre",
+                "reabra"
+            ]
+        }
+    },
+    "programExamples": [
+        "discord",
+        "google chrome",
+        "microsoft edge",
+        "steam",
+        "spotify",
+        "whatsapp",
+        "visual studio code",
+        "photoshop",
+        "epic games",
+        "minecraft",
+        "bloco de notas",
+        "calculadora",
+        "gerenciador de tarefas",
+        "explorador de arquivos",
+        "obs studio"
     ]
 }

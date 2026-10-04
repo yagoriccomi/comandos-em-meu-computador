@@ -8,11 +8,11 @@ const ParamType = Object.freeze({
     INTEGER: 'integer',   // AMAZON.NUMBER: inteiro dentro de min..max (com "default" opcional)
     DURATION: 'duration', // AMAZON.DURATION (ISO 8601, ex.: PT1M30S) convertido em segundos, min..max
     TEXT: 'text',         // AMAZON.SearchQuery: texto curto; NUNCA vira comando (só a URL codificada da pesquisa)
-    PROGRAM: 'program',   // id da lista PRIVADA de programas do PC (hash), vindo do slot de aplicativo
+    VERB: 'verb',         // verbo canônico da frase ("abrir", "executar"…; "*" = frase livre), vindo de um slot de verbos
 });
 const SUPPORTED_PARAM_TYPES = Object.freeze(Object.values(ParamType));
-/** Id dos programas da lista privada do PC: "p" + 12 hex de um hash do nome (o nome nunca trafega). */
-const PROGRAM_ID_PATTERN = /^p[0-9a-f]{12}$/;
+/** Verbo canônico (minúsculas, pode ter acento e espaço) ou "*" para frases livres ("alterna para a TV"). */
+const VERB_PATTERN = /^(\*|[a-zà-ú][a-zà-ú ]{1,29})$/;
 
 class CatalogError extends Error {
     constructor(message) {
@@ -27,6 +27,11 @@ function assertRange(actionId, param) {
     }
 }
 
+function isValidDefault(param) {
+    if (param.type === ParamType.VERB) return typeof param.default === 'string' && VERB_PATTERN.test(param.default);
+    return param.type === ParamType.INTEGER && Number.isSafeInteger(param.default) && param.default >= param.min && param.default <= param.max;
+}
+
 function validateParam(actionId, param) {
     if (!param || typeof param.name !== 'string' || typeof param.slot !== 'string') {
         throw new CatalogError(`${actionId}: parâmetro sem name/slot`);
@@ -35,8 +40,7 @@ function validateParam(actionId, param) {
         throw new CatalogError(`${actionId}: tipo de parâmetro não suportado`);
     }
     if (param.type === ParamType.INTEGER || param.type === ParamType.DURATION) assertRange(actionId, param);
-    if (param.default !== undefined
-        && (param.type !== ParamType.INTEGER || !Number.isSafeInteger(param.default) || param.default < param.min || param.default > param.max)) {
+    if (param.default !== undefined && !isValidDefault(param)) {
         throw new CatalogError(`${actionId}: default inválido em ${param.name}`);
     }
     if (param.type === ParamType.TEXT
@@ -74,6 +78,8 @@ function buildCatalog(source) {
     const byIntent = new Map([...byId.values()].filter((action) => action.intent).map((action) => [action.intent, action]));
     return Object.freeze({
         version: source.version,
+        verbs: Object.freeze({ ...(source.verbs || {}) }),
+        programExamples: Object.freeze([...(source.programExamples || [])]),
         actions: Object.freeze([...byId.values()]),
         findById: (id) => byId.get(id),
         findByIntent: (intentName) => byIntent.get(intentName),
@@ -83,7 +89,7 @@ function buildCatalog(source) {
 module.exports = {
     SUPPORTED_SLOT_TYPES,
     ParamType,
-    PROGRAM_ID_PATTERN,
+    VERB_PATTERN,
     CatalogError,
     buildCatalog,
     catalog: buildCatalog(rawCatalog),
