@@ -11,6 +11,10 @@ const NODE_RUNTIME_NAME = 'node.exe';
 /** Scripts PowerShell que acompanham o pacote (gravados com BOM: o PowerShell 5.1 precisa dele para UTF-8). */
 const POWERSHELL_ASSETS = Object.freeze(['tray.ps1', 'input-helper.ps1', 'scan-programs.ps1', 'speak.ps1']);
 const PACKAGED_FILES = Object.freeze([NODE_RUNTIME_NAME, APP_BUNDLE_NAME, ...POWERSHELL_ASSETS, 'actions.example.json']);
+/** Ícones da bandeja (PC gamer aceso/apagado), copiados para a subpasta "icones" ao lado do tray.ps1. */
+const TRAY_ICON_FOLDER = 'icones';
+const TRAY_ICON_FILES = Object.freeze(['ligado.png', 'apagado-escuro.png', 'apagado-claro.png']);
+const DEV_TRAY_ICON_DIR = path.join(__dirname, 'desktop', TRAY_ICON_FOLDER);
 
 const DEV_ASSET_PATHS = Object.freeze({
     'tray.ps1': path.join(__dirname, 'desktop', 'tray.ps1'),
@@ -49,6 +53,9 @@ module.exports = {
     APP_BUNDLE_NAME,
     NODE_RUNTIME_NAME,
     PACKAGED_FILES,
+    TRAY_ICON_FOLDER,
+    TRAY_ICON_FILES,
+    DEV_TRAY_ICON_DIR,
     POWERSHELL_ASSETS,
     assetPath,
     DEV_ASSET_PATHS,

@@ -42,10 +42,41 @@ function Get-ThemeName {
     return 'Dark'
 }
 
+# Ícone PC gamer: luzes acesas quando pronto; "apagadas" (cinza) sem conexão ou com o núcleo parado.
+$IconFolder = Join-Path $PSScriptRoot 'icones'
+$IconSize = 32
+$PausedBadgeColor = '#F5A623'
+$LightsOnStates = @('ready', 'paused')
+
+function Get-ImageIcon([string]$State, [string]$Theme) {
+    $fileName = if ($LightsOnStates -contains $State) { 'ligado.png' } elseif ($Theme -eq 'Light') { 'apagado-claro.png' } else { 'apagado-escuro.png' }
+    $path = Join-Path $IconFolder $fileName
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    $source = [System.Drawing.Image]::FromFile($path)
+    $bitmap = New-Object System.Drawing.Bitmap $IconSize, $IconSize
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $graphics.DrawImage($source, 0, 0, $IconSize, $IconSize)
+    if ($State -eq 'paused') {
+        $badge = New-Object System.Drawing.SolidBrush ([System.Drawing.ColorTranslator]::FromHtml($PausedBadgeColor))
+        $graphics.FillEllipse($badge, $IconSize - 13, $IconSize - 13, 12, 12)
+    }
+    $graphics.Dispose()
+    $source.Dispose()
+    return [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
+}
+
 function Get-StateIcon([string]$State) {
     $theme = Get-ThemeName
     $key = "$theme-$State"
     if ($script:IconCache.ContainsKey($key)) { return $script:IconCache[$key] }
+    $imageIcon = Get-ImageIcon $State $theme
+    if ($null -ne $imageIcon) {
+        $script:IconCache[$key] = $imageIcon
+        return $imageIcon
+    }
+    # Sem as imagens (instalação antiga): bolinha colorida por estado.
     $colors = $Palette[$theme]
     $bitmap = New-Object System.Drawing.Bitmap 16, 16
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)

@@ -71,6 +71,7 @@ async function main() {
         fs.writeFileSync(path.join(APP_DIR, script), content.startsWith(UTF8_BOM) ? content : `${UTF8_BOM}${content}`);
     }
     fs.copyFileSync(path.join(AGENT_DIR, 'config', 'actions.example.json'), path.join(APP_DIR, 'actions.example.json'));
+    fs.cpSync(path.join(AGENT_DIR, 'src', 'desktop', 'icones'), path.join(APP_DIR, 'icones'), { recursive: true });
 
     console.log('3/3 criando o atalho de instalação…');
     fs.writeFileSync(INSTALLER_SCRIPT, INSTALLER_SCRIPT_CONTENT);
