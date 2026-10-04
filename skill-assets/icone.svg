@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="fundo" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#2a1653"/>
+      <stop offset="60%" stop-color="#120b2b"/>
+      <stop offset="100%" stop-color="#07050f"/>
+    </radialGradient>
+    <linearGradient id="rgb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="50%" stop-color="#7c4dff"/>
+      <stop offset="100%" stop-color="#ff2bd6"/>
+    </linearGradient>
+    <linearGradient id="gabinete" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1c1d26"/>
+      <stop offset="100%" stop-color="#0d0e14"/>
+    </linearGradient>
+    <linearGradient id="vidro" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1b2140" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0b0f22" stop-opacity="0.95"/>
+    </linearGradient>
+    <filter id="brilho" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="desfoque"/>
+      <feMerge><feMergeNode in="desfoque"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="brilhoForte" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <!-- fundo -->
+  <rect width="512" height="512" rx="96" fill="url(#fundo)"/>
+  <!-- luz RGB no chão -->
+  <ellipse cx="256" cy="440" rx="170" ry="26" fill="url(#rgb)" opacity="0.55" filter="url(#brilhoForte)"/>
+
+  <!-- chifres do monstro -->
+  <path d="M168 120 C150 84 156 52 176 34 C178 66 192 92 214 110 Z" fill="url(#rgb)" filter="url(#brilho)"/>
+  <path d="M344 120 C362 84 356 52 336 34 C334 66 320 92 298 110 Z" fill="url(#rgb)" filter="url(#brilho)"/>
+
+  <!-- gabinete -->
+  <rect x="136" y="104" width="240" height="330" rx="26" fill="url(#gabinete)" stroke="url(#rgb)" stroke-width="10" filter="url(#brilho)"/>
+  <!-- vidro lateral -->
+  <rect x="160" y="128" width="192" height="282" rx="16" fill="url(#vidro)" stroke="#2c3360" stroke-width="3"/>
+
+  <!-- ventoinhas RGB -->
+  <g filter="url(#brilho)">
+    <circle cx="256" cy="186" r="44" fill="none" stroke="url(#rgb)" stroke-width="10"/>
+    <circle cx="256" cy="186" r="12" fill="url(#rgb)"/>
+    <path d="M256 152 Q272 170 256 186 Q240 170 256 152 Z M290 186 Q272 202 256 186 Q272 170 290 186 Z M256 220 Q240 202 256 186 Q272 202 256 220 Z M222 186 Q240 170 256 186 Q240 202 222 186 Z" fill="#9fa8ff" opacity="0.85"/>
+  </g>
+  <g filter="url(#brilho)">
+    <circle cx="256" cy="300" r="44" fill="none" stroke="url(#rgb)" stroke-width="10"/>
+    <circle cx="256" cy="300" r="12" fill="url(#rgb)"/>
+    <path d="M256 266 Q272 284 256 300 Q240 284 256 266 Z M290 300 Q272 316 256 300 Q272 284 290 300 Z M256 334 Q240 316 256 300 Q272 316 256 334 Z M222 300 Q240 284 256 300 Q240 316 222 300 Z" fill="#9fa8ff" opacity="0.85"/>
+  </g>
+
+  <!-- placa de vídeo -->
+  <rect x="176" y="362" width="160" height="28" rx="8" fill="#111426" stroke="url(#rgb)" stroke-width="5"/>
+  <rect x="190" y="372" width="96" height="8" rx="4" fill="url(#rgb)" filter="url(#brilho)"/>
+
+  <!-- botão de energia -->
+  <circle cx="256" cy="420" r="7" fill="#00e5ff" filter="url(#brilho)"/>
+</svg>
