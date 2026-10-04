@@ -1,12 +1,14 @@
 'use strict';
 /*
  * Protocolo de mensagens entre a skill e o agente.
- * ATENÇÃO: este arquivo existe em DUAS cópias idênticas (lambda/protocol e agent/src/protocol),
- * porque a Lambda Alexa-hosted só empacota a pasta lambda/. Um teste do agente garante a igualdade.
+ * Fonte única: o agente importa este arquivo (agent/src/shared.js) e o esbuild o embute no pacote.
+ *
+ * v2: parâmetros podem ser inteiros OU textos curtos (ex.: o termo da pesquisa no Google). Textos nunca
+ * viram comando: só entram em argumentos montados por código fixo do agente (ex.: URL codificada).
  */
 const crypto = require('crypto');
 
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 const MESSAGE_TTL_MS = 30 * 1000;
 const MAX_CLOCK_SKEW_MS = 30 * 1000;
 const MAX_MESSAGE_BYTES = 4096;
@@ -21,6 +23,8 @@ const PARAM_NAME_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 const DEVICE_ID_PATTERN = /^[a-z0-9-]{8,64}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_PARAMS = 8;
+const MAX_TEXT_PARAM_LENGTH = 200;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 
 class ProtocolError extends Error {
     constructor(code) {
@@ -72,11 +76,22 @@ function hasValidSignature(message, secret) {
     return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
+function isValidTextParam(value) {
+    return typeof value === 'string'
+        && value.length > 0
+        && value.length <= MAX_TEXT_PARAM_LENGTH
+        && !CONTROL_CHARACTERS.test(value);
+}
+
+function isValidParamValue(value) {
+    return Number.isSafeInteger(value) || isValidTextParam(value);
+}
+
 function isValidParams(params) {
     if (!isPlainObject(params)) return false;
     const entries = Object.entries(params);
     if (entries.length > MAX_PARAMS) return false;
-    return entries.every(([name, value]) => PARAM_NAME_PATTERN.test(name) && Number.isSafeInteger(value));
+    return entries.every(([name, value]) => PARAM_NAME_PATTERN.test(name) && isValidParamValue(value));
 }
 
 function hasValidShape(message) {
@@ -154,6 +169,8 @@ module.exports = {
     MAX_CLOCK_SKEW_MS,
     MAX_MESSAGE_BYTES,
     MIN_SECRET_LENGTH,
+    MAX_TEXT_PARAM_LENGTH,
+    isValidTextParam,
     MessageType,
     AckStatus,
     ProtocolError,
