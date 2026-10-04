@@ -122,8 +122,13 @@ function Publish-Skill {
         Write-Host 'Nada mudou desde o ultimo deploy da skill.'
         return
     }
+    # (o commit abaixo leva codigo E modelo para o repositorio da skill; o modelo tambem vai pela SMAPI)
     Invoke-Checked 'git' @('commit', '-m', "deploy: O Monstro $(Get-Date -Format 'yyyy-MM-dd HH:mm')") $CloneDir
     Invoke-Checked 'git' @('push', 'origin', 'HEAD:master') $CloneDir
+    # O git push publica o CODIGO; o modelo de voz precisa ir pela API (SMAPI), senao fica o antigo.
+    Write-Step 'Enviando o modelo de voz (SMAPI)'
+    $modelFile = Join-Path $CloneDir 'skill-package\interactionModels\custom\pt-BR.json'
+    Invoke-Ask @('smapi', 'set-interaction-model', '--skill-id', $skillId, '--stage', 'development', '--locale', 'pt-BR', '--interaction-model', "file:$modelFile")
     Wait-SkillBuild $skillId
 }
 

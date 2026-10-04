@@ -23,7 +23,8 @@ scripts/deploy.ps1
  │    ├─ node scripts/prepare-deploy.js → copia lambda/ e gera o modelo de voz com:
  │    │     • nome de chamada de %LOCALAPPDATA%\OMonstro\preferencias.json  ("o monstro", "a morgana"…)
  │    │     • verbos de %LOCALAPPDATA%\OMonstro\programas.json  (seção "verbos")
- │    ├─ git commit + git push origin HEAD:master  → a Amazon compila e publica em "development"
+ │    ├─ git commit + git push origin HEAD:master  → a Amazon compila o CÓDIGO em "development"
+ │    ├─ ask smapi set-interaction-model           → envia o MODELO DE VOZ (o push não aplica o modelo)
  │    └─ espera "SUCCEEDED" em ask smapi get-skill-status (até 10 min)
  └─ 3. agente: npm run build:pacote → abre "Instalar O Monstro.cmd" (pede administrador)
 ```
