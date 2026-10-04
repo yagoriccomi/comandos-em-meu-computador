@@ -22,25 +22,40 @@ agent/         Agente Windows: `npm run build:pacote` → dist/O Monstro/ (node.
   src/desktop  sessão do usuário (logon): ícone na bandeja + ações que precisam de tela, via canal local TCP 127.0.0.1
                (porta em core-endpoint.json; NÃO named pipe: a DACL do pipe criado em S4U bloqueia a sessão interativa)
   src/install  assistente de instalação/desinstalação ("Instalar O Monstro.cmd" → node.exe o-monstro.cjs --instalar)
+  src/internal ações INTERNAS (mídia, pesquisa, programas): código fixo do agente; actions.json só liga/desliga
+  src/desktop/input-helper.ps1   PowerShell persistente com LISTA FECHADA de verbos (teclas, menu de mídia, processos)
+  src/desktop/scan-programs.ps1  detecta programas do menu Iniciar (só leitura)
+  src/programs lista PRIVADA %LOCALAPPDATA%\OMonstro\programas.json (nunca no Git) + busca aproximada
+scripts/deploy.ps1   deploy completo (testes → skill via ASK CLI/git push na Alexa-hosted → instalador). Manual: docs/DEPLOY.md
 ```
 
 Fluxo: fala → intent → `actionId` do catálogo → confirmação por voz se `requiresConfirmation` →
 `cmd` assinado em `omonstro/<deviceId>/cmd` → agente valida → executa → `ack` assinado em `.../ack` →
 Alexa diz "Feito." ou "Não consegui executar essa ação.".
+Programas: o nome falado vai como TEXTO; o PC compara com a lista privada. Sem vencedor claro, o ack volta
+`ambiguous`/`not_found` com até 3 nomes e a Alexa pergunta "qual deles?" (aceita "o segundo", o nome ou "sim").
 
 ## Regras inegociáveis
 
 - **Lista fechada.** Nenhum texto vindo da Alexa chega a `exec`, `spawn`, `cmd.exe` ou `powershell.exe`.
   Só `execFile` **sem** `shell`, com executável absoluto e `args` fixos de `actions.json`. Placeholder
-  permitido apenas como elemento inteiro (`"{minutos}"`) para params declarados e validados (inteiro + faixa).
+  permitido apenas como elemento inteiro (`"{minutos}"`) para params **inteiros** declarados e validados.
+- **Texto da Alexa (tipo `text`) só em dois usos:** (1) pesquisa: vira só o `q=` CODIFICADO de
+  `https://www.google.com/search`; (2) nome de programa: só é COMPARADO com a lista privada, e o que executa é
+  o `abrirCom`/`processos` da lista. Texto nunca vai para argumentos de executável nem para o input-helper.
+- **Processos se identificam por pasta + exe**, nunca só pelo nome (`claude.exe` do app ≠ do Claude Code).
 - **Mensagens:** HMAC-SHA256 sobre JSON canônico, validade de 30 s, `requestId` único (anti-replay),
-  `v:1`. Mudança incompatível → `v:2`. O `ack` também é assinado.
+  **`v:2`** (params inteiros ou texto ≤ 200 sem caracteres de controle; ack com `ambiguous`/`not_found` +
+  `choices` ≤ 3 × 60). Mudança incompatível → `v:3` e deploy de skill + agente no MESMO dia. O `ack` também é assinado.
 - **Catálogo em duas partes sincronizadas:** `lambda/catalog/skill-catalog.json` (público, sem executáveis)
   e `actions.json` local (executáveis). Todo id novo entra primeiro no catálogo público, depois
   `npm run catalog:sync` em `lambda/`, depois no `actions.json`. Testes quebram se divergirem.
 - **LGPD:** a Lambda e o broker nunca recebem nome de usuário, caminhos ou saída de comando. Lambda loga
-  só `actionId`, `requestId` e código de resultado. Nunca logar `requestEnvelope`. Log do agente é local
+  só `actionId`, `requestId` e código de resultado. Nunca logar `requestEnvelope`, texto de pesquisa,
+  nome falado de programa nem as opções do "qual deles?" (esses só trafegam assinados). Log do agente é local
   e mascara `C:\Users\<nome>` e o nome do usuário.
+- **Lista de programas e preferências** (`%LOCALAPPDATA%\OMonstro\`) são privadas: nunca no Git (o repositório
+  é PÚBLICO). Só o deploy as usa, para o repositório interno da skill na Amazon.
 - **Segredos:** nada no Git. Lambda: `config/secrets.json` no S3 da skill. Agente:
   `%ProgramData%\OMonstro\config.json` com ACL restrita. Modelos: `*.example.json`.
 - **Erros:** a Alexa só fala as frases de `lambda/speech.js`; sem stack trace. O agente nunca cai por
@@ -51,5 +66,8 @@ Alexa diz "Feito." ou "Não consegui executar essa ação.".
 - CommonJS, 4 espaços, aspas simples, nomes descritivos em inglês no código; textos para o usuário em pt-BR.
 - Testes com `node:test` (`npm test` em `lambda/` e em `agent/`). Sem dependências de teste externas.
 - Conventional Commits (`feat:`, `fix:`, `sec:`, `test:`, `docs:`, `chore:`, `refactor:`). Push só com autorização.
-- Nome de chamada: `invocationName` em `interactionModels/custom/pt-BR.json` (hoje "o monstro").
+- Nome de chamada: o versionado em `interactionModels/custom/pt-BR.json` é "o monstro"; o do dono vem de
+  `preferencias.json` (bandeja → "Trocar nome de chamada…") e o `deploy.ps1` aplica.
+- Deploy: `scripts/deploy.ps1` (ver `docs/DEPLOY.md`). Avisar o dono antes; o login do ASK CLI é dele.
+- Skill única / Casa Inteligente: CANCELADA pelo dono (2026-10-04). Branch `feature/skill-unica-casa-inteligente` arquivada.
 - Jira: não utilizado neste projeto (decisão do dono).
