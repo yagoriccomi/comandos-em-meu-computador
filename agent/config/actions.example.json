@@ -125,6 +125,26 @@
             "id": "destravar_programa",
             "interno": true,
             "enabled": true
+        },
+        {
+            "id": "perguntar_claude",
+            "interno": true,
+            "enabled": true
+        },
+        {
+            "id": "resposta_claude",
+            "interno": true,
+            "enabled": true
+        },
+        {
+            "id": "claude_code_ordem",
+            "interno": true,
+            "enabled": true
+        },
+        {
+            "id": "claude_code_encerrar",
+            "interno": true,
+            "enabled": true
         }
     ]
 }

@@ -15,6 +15,10 @@ const { sendCommand, DeliveryResult } = require('../messaging/commandBus');
 
 const PENDING_ATTRIBUTE = 'pendingAction';
 const PENDING_CHOICE_ATTRIBUTE = 'pendingChoice';
+const PENDING_PIN_ATTRIBUTE = 'pendingPin';
+const PIN_DIGITS = 6;
+const MAX_PIN_REPROMPTS = 2;
+const CLAUDE_ANSWER_ACTION_ID = 'resposta_claude';
 const PENDING_CONFIRMATION_TTL_MS = 60 * 1000;
 const YES_INTENT = 'AMAZON.YesIntent';
 const NO_INTENT = 'AMAZON.NoIntent';
@@ -23,6 +27,12 @@ const NOT_A_CHOICE_INTENTS = Object.freeze(['AMAZON.CancelIntent', 'AMAZON.StopI
 
 function hashUserId(userId) {
     return crypto.createHash('sha256').update(String(userId)).digest('hex');
+}
+
+/** Voice ID: personId só existe quando a Alexa reconhece a voz (recurso "personalização" ligado na skill). */
+function getPersonId(requestEnvelope) {
+    const system = requestEnvelope.context && requestEnvelope.context.System;
+    return system && system.person ? system.person.personId : undefined;
 }
 
 function getSkillId(requestEnvelope) {
@@ -120,13 +130,50 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
         return ask(handlerInput, result === DeliveryResult.AMBIGUOUS ? speech.whichOne(choices) : speech.didYouMean(choices));
     }
 
+    /**
+     * Trava de voz das ações "voiceLocked" (Claude Code). Com hashes cadastrados, só essas vozes passam.
+     * Sem cadastro, vale só o PIN do PC; a Lambda registra o HASH da voz vista para o dono poder cadastrar.
+     */
+    function isVoiceAllowed(handlerInput, secrets, action) {
+        if (!action.voiceLocked) return true;
+        const personId = getPersonId(handlerInput.requestEnvelope);
+        const allowed = secrets.allowedPersonIdHashes || [];
+        if (allowed.length === 0) {
+            if (personId) logger.info({ event: 'person_seen', personHash: hashUserId(personId) });
+            return true;
+        }
+        return Boolean(personId) && allowed.includes(hashUserId(personId));
+    }
+
+    /** O PC pediu o PIN (sessão de 3 h vencida ou PIN errado): guarda a ordem SEM o PIN e pergunta. */
+    function askPin(handlerInput, action, params, wasWrong, reprompts = 0) {
+        const { pin, ...withoutPin } = params;
+        storePending(handlerInput, PENDING_PIN_ATTRIBUTE, { actionId: action.id, params: withoutPin, reprompts, expiresAt: clock() + PENDING_CONFIRMATION_TTL_MS });
+        return ask(handlerInput, wasWrong ? speech.PIN_WRONG : speech.ASK_PIN);
+    }
+
+    function answerDone(handlerInput, action, text) {
+        if (text) return speak(handlerInput, speech.pcText(text));
+        return speak(handlerInput, speech.DONE_BY_ACTION[action.id] || speech.DONE);
+    }
+
     async function execute(handlerInput, secrets, action, params) {
+        if (!isVoiceAllowed(handlerInput, secrets, action)) {
+            logger.info({ event: 'request_rejected', actionId: action.id, reason: 'voice_not_allowed' });
+            return speak(handlerInput, speech.VOICE_NOT_RECOGNIZED);
+        }
         const transport = await connectTransport(secrets.mqtt);
         try {
-            const { result, requestId, choices } = await sendCommand({ transport, secrets, actionId: action.id, params });
-            // Só códigos no log: nunca o nome falado, o texto da pesquisa ou as opções.
+            const { result, requestId, choices, text } = await sendCommand({ transport, secrets, actionId: action.id, params });
+            // Só códigos no log: nunca o nome falado, o texto da pesquisa, o PIN, as opções ou a resposta do Claude.
             logger.info({ event: 'action_result', actionId: action.id, requestId, result });
-            if (result === DeliveryResult.DONE) return speak(handlerInput, speech.DONE);
+            if (result === DeliveryResult.DONE) return answerDone(handlerInput, action, text);
+            if (action.id === CLAUDE_ANSWER_ACTION_ID) {
+                if (result === DeliveryResult.PENDING) return speak(handlerInput, speech.CLAUDE_STILL_THINKING);
+                if (result === DeliveryResult.NOT_FOUND) return speak(handlerInput, speech.CLAUDE_NO_ANSWER);
+            }
+            if (result === DeliveryResult.PIN_REQUIRED) return askPin(handlerInput, action, params, params.pin !== undefined);
+            if (result === DeliveryResult.LOCKED) return speak(handlerInput, speech.CLAUDE_CODE_LOCKED);
             if (result === DeliveryResult.AMBIGUOUS || result === DeliveryResult.NOT_FOUND) {
                 return askWhichOne(handlerInput, action, params, result, choices);
             }
@@ -187,10 +234,11 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
 
     const confirmNoHandler = {
         canHandle: (handlerInput) => isIntentRequest(handlerInput, NO_INTENT)
-            && (hasPendingAction(handlerInput) || hasPending(handlerInput, PENDING_CHOICE_ATTRIBUTE)),
+            && (hasPendingAction(handlerInput) || hasPending(handlerInput, PENDING_CHOICE_ATTRIBUTE) || hasPending(handlerInput, PENDING_PIN_ATTRIBUTE)),
         handle(handlerInput) {
             takePendingAction(handlerInput, clock);
             takePending(handlerInput, PENDING_CHOICE_ATTRIBUTE, clock);
+            takePending(handlerInput, PENDING_PIN_ATTRIBUTE, clock);
             return speak(handlerInput, speech.CANCELLED_BY_USER);
         },
     };
@@ -223,7 +271,37 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
         },
     };
 
-    return [choiceHandler, actionHandler, confirmYesHandler, confirmNoHandler];
+    /** Resposta ao pedido de PIN: só os dígitos falados contam ("um, dois, três…" chega como 123…). */
+    const pinHandler = {
+        canHandle(handlerInput) {
+            const { requestEnvelope } = handlerInput;
+            return Alexa.getRequestType(requestEnvelope) === 'IntentRequest'
+                && hasPending(handlerInput, PENDING_PIN_ATTRIBUTE)
+                && !NOT_A_CHOICE_INTENTS.includes(Alexa.getIntentName(requestEnvelope));
+        },
+        async handle(handlerInput) {
+            const secrets = await authorize(handlerInput);
+            if (!secrets) return speak(handlerInput, speech.FAILED);
+            const pending = takePending(handlerInput, PENDING_PIN_ATTRIBUTE, clock);
+            const action = pending && catalog.findById(pending.actionId);
+            if (!action) return speak(handlerInput, speech.CONFIRMATION_EXPIRED);
+            const digits = String(spokenSlotValue(handlerInput.requestEnvelope) || '').replace(/\D/g, '');
+            if (digits.length !== PIN_DIGITS) {
+                const reprompts = Number(pending.reprompts) || 0;
+                if (reprompts >= MAX_PIN_REPROMPTS) return speak(handlerInput, speech.CANCELLED_BY_USER);
+                storePending(handlerInput, PENDING_PIN_ATTRIBUTE, { ...pending, reprompts: reprompts + 1 });
+                return ask(handlerInput, speech.PIN_NOT_UNDERSTOOD);
+            }
+            const resolution = revalidateParams(action, { ...pending.params, pin: digits });
+            if (!resolution.ok) {
+                logger.info({ event: 'request_rejected', reason: resolution.reason });
+                return speak(handlerInput, speech.UNKNOWN_ACTION);
+            }
+            return execute(handlerInput, secrets, resolution.action, resolution.params);
+        },
+    };
+
+    return [pinHandler, choiceHandler, actionHandler, confirmYesHandler, confirmNoHandler];
 }
 
-module.exports = { createActionHandlers, hashUserId, PENDING_ATTRIBUTE, PENDING_CHOICE_ATTRIBUTE, PENDING_CONFIRMATION_TTL_MS };
+module.exports = { createActionHandlers, hashUserId, PENDING_ATTRIBUTE, PENDING_CHOICE_ATTRIBUTE, PENDING_PIN_ATTRIBUTE, PENDING_CONFIRMATION_TTL_MS };

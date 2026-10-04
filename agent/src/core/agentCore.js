@@ -20,6 +20,7 @@ function createAgentCore({ config, transport, guard, localActions, executor, des
     /** ok → "ok"; busca de programa sem vencedor → "ambiguous"/"not_found" com opções; resto → "error". */
     async function sendAck(requestId, result) {
         let reply = { status: result.ok ? protocol.AckStatus.OK : protocol.AckStatus.ERROR };
+        if (result.ok && result.text) reply = { status: protocol.AckStatus.OK, text: result.text };
         if (!result.ok && result.status) reply = { status: result.status, choices: result.choices || [] };
         const ack = protocol.createAck({ requestId, ...reply }, config.hmacSecret, clock());
         await transport.publish(protocol.ackTopic(config.deviceId), protocol.serialize(ack));

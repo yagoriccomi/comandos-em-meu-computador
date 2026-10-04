@@ -368,6 +368,81 @@
                     "default": 0
                 }
             ]
+        },
+        {
+            "id": "perguntar_claude",
+            "description": "Pergunta ao Claude Code do PC (assinatura); o PC fala a resposta",
+            "spokenName": "perguntar ao Claude",
+            "intent": "PerguntarClaudeIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "pergunta",
+                    "slot": "pergunta",
+                    "type": "text",
+                    "maxLength": 200
+                }
+            ]
+        },
+        {
+            "id": "resposta_claude",
+            "description": "Lê o resumo da última resposta do Claude",
+            "spokenName": "a resposta do Claude",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": [
+                "a resposta do claude",
+                "resposta do claude",
+                "qual a resposta do claude",
+                "ler a resposta do claude",
+                "o que o claude respondeu",
+                "a resposta do cloud",
+                "resposta do cloud"
+            ],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "claude_code_ordem",
+            "description": "Manda uma ordem ao Claude Code do PC (trava: voz + PIN a cada 3 h)",
+            "spokenName": "mandar o Claude Code",
+            "intent": "MandarClaudeCodeIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "voiceLocked": true,
+            "params": [
+                {
+                    "name": "ordem",
+                    "slot": "ordem",
+                    "type": "text",
+                    "maxLength": 200
+                },
+                {
+                    "name": "pin",
+                    "slot": "pin",
+                    "type": "text",
+                    "maxLength": 6,
+                    "optional": true
+                }
+            ]
+        },
+        {
+            "id": "claude_code_encerrar",
+            "description": "Encerra a sessão ativa (PIN) do Claude Code na hora",
+            "spokenName": "encerrar a sessão do Claude Code",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": [
+                "encerrar sessão do claude code",
+                "encerrar a sessão do claude code",
+                "encerra a sessão do claude code",
+                "fechar a sessão do claude code",
+                "bloquear o claude code",
+                "encerrar sessão do cloud code"
+            ],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
         }
     ],
     "verbs": {

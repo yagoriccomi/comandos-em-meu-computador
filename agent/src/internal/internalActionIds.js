@@ -14,6 +14,10 @@ const INTERNAL_ACTION_IDS = Object.freeze([
     'abrir_programa',
     'fechar_programa',
     'destravar_programa',
+    'perguntar_claude',
+    'resposta_claude',
+    'claude_code_ordem',
+    'claude_code_encerrar',
 ]);
 
 module.exports = { INTERNAL_ACTION_IDS };

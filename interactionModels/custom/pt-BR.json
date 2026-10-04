@@ -297,6 +297,77 @@
             "é o {escolha}",
             "é a {escolha}"
           ]
+        },
+        {
+          "name": "PerguntarClaudeIntent",
+          "slots": [
+            {
+              "name": "pergunta",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "perguntar ao claude {pergunta}",
+            "pergunta ao claude {pergunta}",
+            "pergunte ao claude {pergunta}",
+            "perguntar para o claude {pergunta}",
+            "pergunta para o claude {pergunta}",
+            "pergunta pro claude {pergunta}",
+            "perguntar pro claude {pergunta}",
+            "perguntar ao cloud {pergunta}",
+            "pergunta ao cloud {pergunta}",
+            "pergunte ao cloud {pergunta}",
+            "perguntar para o cloud {pergunta}",
+            "pergunta para o cloud {pergunta}",
+            "pergunta pro cloud {pergunta}",
+            "perguntar pro cloud {pergunta}"
+          ]
+        },
+        {
+          "name": "MandarClaudeCodeIntent",
+          "slots": [
+            {
+              "name": "ordem",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "mandar o claude code {ordem}",
+            "manda o claude code {ordem}",
+            "mandar para o claude code {ordem}",
+            "manda pro claude code {ordem}",
+            "manda para o claude code {ordem}",
+            "pedir ao claude code {ordem}",
+            "pede pro claude code {ordem}",
+            "fala pro claude code {ordem}",
+            "falar para o claude code {ordem}",
+            "mandar o cloud code {ordem}",
+            "manda o cloud code {ordem}",
+            "mandar para o cloud code {ordem}",
+            "manda pro cloud code {ordem}",
+            "manda para o cloud code {ordem}",
+            "pedir ao cloud code {ordem}",
+            "pede pro cloud code {ordem}",
+            "fala pro cloud code {ordem}",
+            "falar para o cloud code {ordem}"
+          ]
+        },
+        {
+          "name": "PinIntent",
+          "slots": [
+            {
+              "name": "pin",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "o pin é {pin}",
+            "pin {pin}",
+            "meu pin é {pin}",
+            "a senha é {pin}",
+            "o código é {pin}",
+            "pin é {pin}"
+          ]
         }
       ],
       "types": [
@@ -528,6 +599,33 @@
                   "pular o início",
                   "pular a introdução",
                   "pular"
+                ]
+              }
+            },
+            {
+              "id": "resposta_claude",
+              "name": {
+                "value": "a resposta do claude",
+                "synonyms": [
+                  "resposta do claude",
+                  "qual a resposta do claude",
+                  "ler a resposta do claude",
+                  "o que o claude respondeu",
+                  "a resposta do cloud",
+                  "resposta do cloud"
+                ]
+              }
+            },
+            {
+              "id": "claude_code_encerrar",
+              "name": {
+                "value": "encerrar sessão do claude code",
+                "synonyms": [
+                  "encerrar a sessão do claude code",
+                  "encerra a sessão do claude code",
+                  "fechar a sessão do claude code",
+                  "bloquear o claude code",
+                  "encerrar sessão do cloud code"
                 ]
               }
             }

@@ -49,6 +49,21 @@ module.exports = Object.freeze({
     GOODBYE: 'Até mais.',
     CONFIRMATION_EXPIRED: 'Demorou demais para confirmar. Peça de novo, por favor.',
     PROGRAM_NOT_FOUND: 'Não achei esse programa no computador.',
+    CLAUDE_STILL_THINKING: 'O Claude ainda está pensando. Peça a resposta de novo daqui a pouco.',
+    CLAUDE_NO_ANSWER: 'Ainda não há resposta do Claude.',
+    ASK_PIN: 'Para usar o Claude Code, diga o PIN de seis dígitos, um número de cada vez.',
+    PIN_NOT_UNDERSTOOD: 'Não entendi o PIN. Diga os seis dígitos, um de cada vez.',
+    PIN_WRONG: 'PIN incorreto. Diga de novo, um número de cada vez.',
+    CLAUDE_CODE_LOCKED: 'O Claude Code está bloqueado por tentativas erradas. Tente de novo em quinze minutos.',
+    VOICE_NOT_RECOGNIZED: 'Não reconheci a sua voz para usar o Claude Code.',
+    /** Frase de sucesso específica de algumas ações (o resto diz "Feito."). */
+    DONE_BY_ACTION: Object.freeze({
+        perguntar_claude: 'Perguntei ao Claude. A resposta vai sair no computador.',
+        claude_code_ordem: 'Enviei para o Claude Code. Quando ele terminar, o computador avisa.',
+        claude_code_encerrar: 'Sessão do Claude Code encerrada.',
+    }),
+    /** Texto vindo do PC (resumo da resposta do Claude), escapado para o SSML. */
+    pcText: (text) => escapeSsml(text),
     CHOICE_NOT_UNDERSTOOD: 'Não entendi qual deles. Peça de novo, por favor.',
     whichOne: (choices) => `Encontrei ${joinNames(choices, 'e')}. Qual deles?`,
     didYouMean: (choices) => `Não achei esse programa. Você quis dizer ${joinNames(choices, 'ou')}?`,

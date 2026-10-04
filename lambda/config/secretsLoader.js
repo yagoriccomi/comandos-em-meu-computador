@@ -35,12 +35,18 @@ function validateSecrets(secrets) {
     if (hashes !== undefined && (!Array.isArray(hashes) || !hashes.every((hash) => SHA256_HEX.test(hash)))) {
         throw new SecretsError('invalid_user_hashes');
     }
+    // Voice ID (opcional): hashes de context.System.person.personId que podem usar o Claude Code.
+    const personHashes = secrets.allowedPersonIdHashes;
+    if (personHashes !== undefined && (!Array.isArray(personHashes) || !personHashes.every((hash) => SHA256_HEX.test(hash)))) {
+        throw new SecretsError('invalid_person_hashes');
+    }
     return Object.freeze({
         skillId: secrets.skillId,
         deviceId: secrets.deviceId,
         hmacSecret: secrets.hmacSecret,
         mqtt: Object.freeze({ url: mqtt.url, username: mqtt.username, password: mqtt.password }),
         allowedUserIdHashes: Object.freeze(hashes ? [...hashes] : []),
+        allowedPersonIdHashes: Object.freeze(personHashes ? [...personHashes] : []),
     });
 }
 

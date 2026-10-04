@@ -8,6 +8,13 @@
 const { HelperVerb } = require('../desktop/inputHelper');
 const { matchProgram, MatchStatus } = require('../programs/programMatcher');
 const { protocol } = require('../shared');
+const { LockStatus } = require('../claude/sessionLock');
+const { JobState } = require('../claude/claudeJobs');
+
+const LOCK_RESULTS = Object.freeze({
+    [LockStatus.PIN_REQUIRED]: { ok: false, status: protocol.AckStatus.PIN_REQUIRED },
+    [LockStatus.LOCKED]: { ok: false, status: protocol.AckStatus.LOCKED },
+});
 
 const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q=';
 const WINDOWS_VOLUME_STEP_PERCENT = 2; // cada toque da tecla de volume muda 2%
@@ -44,8 +51,13 @@ function isHelperOk(reply) {
  * @param {() => { programs: object[] }} deps.loadPrograms   lê a lista privada (a cada pedido: edições valem na hora)
  * @param {{ openApp: (appId: string) => Promise<boolean>, openUrl: (url: string) => Promise<boolean> }} deps.launcher
  * @param {object} deps.logger
+ * @param {{ ask: Function, order: Function, lastAnswer: Function }} [deps.claudeJobs]
+ * @param {{ check: Function, revoke: Function }} [deps.sessionLock]
+ * @param {(text: string) => void} [deps.notify]   balão perto do relógio
  */
-function createInternalRunner({ inputHelper, loadPrograms, launcher, logger, setTimer = setTimeout, closeGraceMs = CLOSE_GRACE_MS }) {
+function createInternalRunner({
+    inputHelper, loadPrograms, launcher, logger, claudeJobs, sessionLock, notify = () => {}, setTimer = setTimeout, closeGraceMs = CLOSE_GRACE_MS,
+}) {
     async function helper(verb, argument) {
         const reply = await inputHelper.run(verb, argument);
         if (!isHelperOk(reply)) logger.warn({ event: 'input_helper_reply', verb, reply: reply.slice(0, 40) });
@@ -92,6 +104,44 @@ function createInternalRunner({ inputHelper, loadPrograms, launcher, logger, set
         return { ok: await launcher.openApp(program.appId) };
     }
 
+    function askClaude(params) {
+        claudeJobs.ask(params.pergunta);
+        return { ok: true };
+    }
+
+    /** Resumo da última resposta para a Alexa ler (só o resumo; a resposta inteira fica no PC). */
+    function readClaudeAnswer() {
+        const answer = claudeJobs.lastAnswer();
+        if (answer.state === JobState.RUNNING) return { ok: false, status: protocol.AckStatus.PENDING };
+        if (answer.state !== JobState.DONE) return { ok: false, status: protocol.AckStatus.NOT_FOUND };
+        const text = answer.summary.slice(0, protocol.MAX_ACK_TEXT_LENGTH).trim();
+        return text ? { ok: true, text } : { ok: false, status: protocol.AckStatus.NOT_FOUND };
+    }
+
+    /** Ordem ao Claude Code: só com a sessão ativa (PIN nas últimas 3 h) e não revogada. */
+    function orderClaudeCode(params) {
+        const status = sessionLock.check(params.pin);
+        if (status === LockStatus.NO_PIN) {
+            notify('Defina o PIN do Claude Code no ícone do O Monstro (menu Claude Code).');
+            return { ok: false };
+        }
+        if (status !== LockStatus.OK) return LOCK_RESULTS[status];
+        try {
+            claudeJobs.order(params.ordem);
+        } catch (error) {
+            logger.warn({ event: 'claude_order_refused', code: error.code });
+            if (error.code === 'no_project_folder') notify('Escolha a pasta do Claude Code no ícone do O Monstro (menu Claude Code).');
+            return { ok: false };
+        }
+        return { ok: true };
+    }
+
+    function endClaudeCodeSession() {
+        sessionLock.revoke();
+        notify('Sessão do Claude Code encerrada. A próxima ordem vai pedir o PIN.');
+        return { ok: true };
+    }
+
     const handlers = {
         pausar_continuar: () => helper(HelperVerb.PLAY_PAUSE),
         alternar_mudo: () => helper(HelperVerb.MUTE),
@@ -106,6 +156,10 @@ function createInternalRunner({ inputHelper, loadPrograms, launcher, logger, set
         abrir_programa: openProgram,
         fechar_programa: closeProgram,
         destravar_programa: unlockProgram,
+        perguntar_claude: askClaude,
+        resposta_claude: readClaudeAnswer,
+        claude_code_ordem: orderClaudeCode,
+        claude_code_encerrar: endClaudeCodeSession,
     };
 
     return {

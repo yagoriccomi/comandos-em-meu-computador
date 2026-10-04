@@ -40,6 +40,7 @@ function validateParam(actionId, param) {
         throw new CatalogError(`${actionId}: tipo de parâmetro não suportado`);
     }
     if (param.type === ParamType.INTEGER || param.type === ParamType.DURATION) assertRange(actionId, param);
+    if (param.optional !== undefined && typeof param.optional !== 'boolean') throw new CatalogError(`${actionId}: optional inválido em ${param.name}`);
     if (param.default !== undefined && !isValidDefault(param)) {
         throw new CatalogError(`${actionId}: default inválido em ${param.name}`);
     }
@@ -63,6 +64,7 @@ function validateAction(action) {
     if (typeof action.requiresConfirmation !== 'boolean' || typeof action.requiresDesktop !== 'boolean') {
         throw new CatalogError(`${action.id}: flags obrigatórias ausentes`);
     }
+    if (action.voiceLocked !== undefined && typeof action.voiceLocked !== 'boolean') throw new CatalogError(`${action.id}: voiceLocked inválido`);
     if (!Array.isArray(action.params)) throw new CatalogError(`${action.id}: params deve ser lista`);
     action.params.forEach((param) => validateParam(action.id, param));
 }

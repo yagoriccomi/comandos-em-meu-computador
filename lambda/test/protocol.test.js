@@ -117,3 +117,15 @@ test('shouldBuildTopicsOnlyForValidDeviceId', () => {
 test('shouldProduceSameCanonicalFormRegardlessOfKeyOrder', () => {
     assert.equal(protocol.canonicalize({ b: 1, a: { d: 2, c: 3 } }), protocol.canonicalize({ a: { c: 3, d: 2 }, b: 1 }));
 });
+
+test('shouldCarrySignedSpeechTextAndNewStatusesInAck', () => {
+    const requestId = '9b2f7a8e-1c3d-4e5f-8a9b-0c1d2e3f4a5b';
+    for (const status of ['pending', 'pin_required', 'locked']) {
+        assert.equal(protocol.verify(protocol.createAck({ requestId, status }, SECRET, NOW), { secret: SECRET, expectedType: protocol.MessageType.ACK, now: NOW }).status, status);
+    }
+    const ack = protocol.createAck({ requestId, status: 'ok', text: 'Canberra é a capital.' }, SECRET, NOW);
+    assert.equal(protocol.verify(ack, { secret: SECRET, expectedType: protocol.MessageType.ACK, now: NOW }).text, 'Canberra é a capital.');
+    for (const text of ['', 'x'.repeat(protocol.MAX_ACK_TEXT_LENGTH + 1), 'a\nb', 42]) {
+        assertRejectedWith('malformed', () => protocol.createAck({ requestId, status: 'ok', text }, SECRET, NOW));
+    }
+});

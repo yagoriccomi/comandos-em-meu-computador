@@ -305,3 +305,84 @@ test('shouldEscapeProgramNamesInSpeech', async () => {
     const response = await skill.invoke(intentRequest('AbrirAplicativoIntent', { aplicativo: { name: 'aplicativo', value: 'at' } }));
     assert.equal(speechOf(response), 'Encontrei AT&amp;T &lt;Beta&gt; e Outro. Qual deles?');
 });
+
+// ---- Claude e Claude Code ----
+test('shouldAskClaudeAndConfirmThatAnswerGoesToPc', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: 'ok' });
+    const response = await skill.invoke(intentRequest('PerguntarClaudeIntent', { pergunta: { name: 'pergunta', value: 'qual a capital da austrália' } }));
+    assert.equal(speechOf(response), 'Perguntei ao Claude. A resposta vai sair no computador.');
+    assert.deepEqual(executed, [{ actionId: 'perguntar_claude', params: { pergunta: 'qual a capital da austrália' } }]);
+});
+
+test('shouldReadClaudeSummaryOrSayItIsStillThinking', async () => {
+    const answer = await buildSkill({ agentStatus: () => ({ status: 'ok', text: 'A capital é Canberra & não Sydney.' }) });
+    const read = await answer.skill.invoke(intentRequest('ExecutarRotinaIntent', matchedSlot('rotina', 'a resposta do claude', 'resposta_claude')));
+    assert.equal(speechOf(read), 'A capital é Canberra &amp; não Sydney.');
+    const thinking = await buildSkill({ agentStatus: () => ({ status: 'pending' }) });
+    const wait = await thinking.skill.invoke(intentRequest('ExecutarRotinaIntent', matchedSlot('rotina', 'a resposta do claude', 'resposta_claude')));
+    assert.equal(speechOf(wait), 'O Claude ainda está pensando. Peça a resposta de novo daqui a pouco.');
+    const none = await buildSkill({ agentStatus: () => ({ status: 'not_found' }) });
+    const empty = await none.skill.invoke(intentRequest('ExecutarRotinaIntent', matchedSlot('rotina', 'a resposta do claude', 'resposta_claude')));
+    assert.equal(speechOf(empty), 'Ainda não há resposta do Claude.');
+});
+
+function pinAgent(correctPin) {
+    return (command) => {
+        if (command.params.pin === undefined) return { status: 'pin_required' };
+        return command.params.pin === correctPin ? { status: 'ok' } : { status: 'pin_required' };
+    };
+}
+
+test('shouldAskPinThenSendOrderWithDigitsSpokenOneByOne', async () => {
+    const { skill, executed, logs } = await buildSkill({ agentStatus: pinAgent('482913') });
+    const question = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'rode os testes do projeto' } }));
+    assert.equal(speechOf(question), 'Para usar o Claude Code, diga o PIN de seis dígitos, um número de cada vez.');
+    assert.equal(question.sessionAttributes.pendingPin.params.pin, undefined, 'o PIN nunca fica na sessão');
+    const wrong = await skill.invoke(followUp(question, 'PinIntent', { pin: { name: 'pin', value: '111111' } }));
+    assert.equal(speechOf(wrong), 'PIN incorreto. Diga de novo, um número de cada vez.');
+    const right = await skill.invoke(followUp(wrong, 'PinIntent', { pin: { name: 'pin', value: '482913' } }));
+    assert.equal(speechOf(right), 'Enviei para o Claude Code. Quando ele terminar, o computador avisa.');
+    assert.deepEqual(executed[2], { actionId: 'claude_code_ordem', params: { ordem: 'rode os testes do projeto', pin: '482913' } });
+    assert.ok(!JSON.stringify(logs).includes('482913'), 'PIN nunca no log');
+});
+
+test('shouldRepromptWhenPinIsNotSixDigitsAndGiveUpAfterTwoTries', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: pinAgent('482913') });
+    let turn = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'x' } }));
+    for (const expected of ['Não entendi o PIN. Diga os seis dígitos, um de cada vez.', 'Não entendi o PIN. Diga os seis dígitos, um de cada vez.', 'Tudo bem, não fiz nada.']) {
+        turn = await skill.invoke(followUp(turn, 'PinIntent', { pin: { name: 'pin', value: '12' } }));
+        assert.equal(speechOf(turn), expected);
+    }
+    assert.equal(executed.length, 1);
+});
+
+test('shouldSayLockedAfterTooManyWrongPins', async () => {
+    const { skill } = await buildSkill({ agentStatus: () => ({ status: 'locked' }) });
+    const response = await skill.invoke(intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'x' } }));
+    assert.equal(speechOf(response), 'O Claude Code está bloqueado por tentativas erradas. Tente de novo em quinze minutos.');
+});
+
+test('shouldRefuseUnknownVoiceWhenVoiceIdIsConfigured', async () => {
+    const { hashUserId: hash } = require('../handlers/actionHandler');
+    const secrets = { ...SECRETS, allowedPersonIdHashes: [hash('amzn1.ask.person.DONO')] };
+    const { skill, broker } = await buildSkill({ secrets, agentStatus: 'ok' });
+    const withPerson = (personId) => {
+        const request = intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'x' } });
+        if (personId) request.context.System.person = { personId };
+        return request;
+    };
+    assert.equal(speechOf(await skill.invoke(withPerson('amzn1.ask.person.VISITA'))), 'Não reconheci a sua voz para usar o Claude Code.');
+    assert.equal(speechOf(await skill.invoke(withPerson(undefined))), 'Não reconheci a sua voz para usar o Claude Code.');
+    assert.equal(broker.published.length, 0);
+    assert.equal(speechOf(await skill.invoke(withPerson('amzn1.ask.person.DONO'))), 'Enviei para o Claude Code. Quando ele terminar, o computador avisa.');
+});
+
+test('shouldLogOnlyHashOfUnregisteredVoice', async () => {
+    const { skill, logs } = await buildSkill({ agentStatus: 'ok' });
+    const request = intentRequest('MandarClaudeCodeIntent', { ordem: { name: 'ordem', value: 'x' } });
+    request.context.System.person = { personId: 'amzn1.ask.person.SEGREDO' };
+    await skill.invoke(request);
+    const seen = logs.find((entry) => entry.event === 'person_seen');
+    assert.match(seen.personHash, /^[0-9a-f]{64}$/);
+    assert.ok(!JSON.stringify(logs).includes('SEGREDO'));
+});

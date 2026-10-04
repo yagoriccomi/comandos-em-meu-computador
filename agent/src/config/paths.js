@@ -33,6 +33,11 @@ module.exports = Object.freeze({
     PROGRAMS_FILE: path.join(USER_DATA_DIR, 'programas.json'),
     PREFERENCES_FILE: path.join(USER_DATA_DIR, 'preferencias.json'),
     ROUTINES_FILE: path.join(USER_DATA_DIR, 'rotinas-sugeridas.txt'),
+    SPEAK_SCRIPT: path.join(INSTALL_DIR, 'speak.ps1'),
+    CLAUDE_LOCK_FILE: path.join(USER_DATA_DIR, 'claude-code.json'),
+    CLAUDE_ANSWER_FILE: path.join(USER_DATA_DIR, 'claude', 'ultima-resposta.json'),
+    CLAUDE_ANSWER_TEXT_FILE: path.join(USER_DATA_DIR, 'claude', 'ultima-resposta.txt'),
+    CLAUDE_QUESTIONS_DIR: path.join(USER_DATA_DIR, 'claude', 'perguntas'),
     LOG_DIR: path.join(DATA_DIR, 'logs'),
     ALEXA_EXPORT_DIR: path.join(DATA_DIR, 'enviar-para-alexa'),
     // Porta (aleatória, só 127.0.0.1) onde o núcleo espera a sessão de desktop. Legível só por você e admins.

@@ -26,6 +26,10 @@ agent/         Agente Windows: `npm run build:pacote` → dist/O Monstro/ (node.
   src/desktop/input-helper.ps1   PowerShell persistente com LISTA FECHADA de verbos (teclas, menu de mídia, processos)
   src/desktop/scan-programs.ps1  detecta programas do menu Iniciar (só leitura)
   src/programs lista PRIVADA %LOCALAPPDATA%\OMonstro\programas.json (nunca no Git) + busca aproximada
+  src/claude   Claude Code da ASSINATURA (`claude -p`, login do dono): perguntas (Sonnet, só WebSearch/WebFetch) e
+               ordens (pasta escolhida na bandeja; --continue ou "novo chat" com Opus/medium/auto). Assíncrono:
+               a resposta é falada pelo PC (speak.ps1, voz pt-BR) e o resumo volta no ack de "a resposta do Claude".
+               Trava das ordens: PIN 6 dígitos (scrypt) → sessão de 3 h; "encerrar sessão" revoga; 5 erros = 15 min.
 scripts/deploy.ps1   deploy completo (testes → skill via ASK CLI/git push na Alexa-hosted → instalador). Manual: docs/DEPLOY.md
 ```
 
@@ -42,7 +46,9 @@ Programas: o nome falado vai como TEXTO; o PC compara com a lista privada. Sem v
   permitido apenas como elemento inteiro (`"{minutos}"`) para params **inteiros** declarados e validados.
 - **Texto da Alexa (tipo `text`) só em dois usos:** (1) pesquisa: vira só o `q=` CODIFICADO de
   `https://www.google.com/search`; (2) nome de programa: só é COMPARADO com a lista privada, e o que executa é
-  o `abrirCom`/`processos` da lista. Texto nunca vai para argumentos de executável nem para o input-helper.
+  o `abrirCom`/`processos` da lista; (3) pergunta/ordem ao Claude Code: SÓ pelo STDIN do `claude.exe`, com
+  argumentos fixos de `agent/src/claude/claudeCli.js` (e PIN válido para ordens). Texto nunca vai para argumentos
+  de executável nem para o input-helper. Fala do PC (speak.ps1) também recebe texto só pelo stdin.
 - **Processos se identificam por pasta + exe**, nunca só pelo nome (`claude.exe` do app ≠ do Claude Code).
 - **Mensagens:** HMAC-SHA256 sobre JSON canônico, validade de 30 s, `requestId` único (anti-replay),
   **`v:2`** (params inteiros ou texto ≤ 200 sem caracteres de controle; ack com `ambiguous`/`not_found` +
@@ -52,7 +58,8 @@ Programas: o nome falado vai como TEXTO; o PC compara com a lista privada. Sem v
   `npm run catalog:sync` em `lambda/`, depois no `actions.json`. Testes quebram se divergirem.
 - **LGPD:** a Lambda e o broker nunca recebem nome de usuário, caminhos ou saída de comando. Lambda loga
   só `actionId`, `requestId` e código de resultado. Nunca logar `requestEnvelope`, texto de pesquisa,
-  nome falado de programa nem as opções do "qual deles?" (esses só trafegam assinados). Log do agente é local
+  nome falado de programa, as opções do "qual deles?", o PIN, a pergunta/ordem nem a resposta do Claude (esses só
+  trafegam assinados). Voice ID: a Lambda só loga o HASH do personId. Log do agente é local
   e mascara `C:\Users\<nome>` e o nome do usuário.
 - **Lista de programas e preferências** (`%LOCALAPPDATA%\OMonstro\`) são privadas: nunca no Git (o repositório
   é PÚBLICO). Só o deploy as usa, para o repositório interno da skill na Amazon.

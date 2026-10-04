@@ -16,8 +16,21 @@ const MIN_SECRET_LENGTH = 32;
 const TOPIC_PREFIX = 'omonstro';
 
 const MessageType = Object.freeze({ COMMAND: 'cmd', ACK: 'ack' });
-/** ambiguous/not_found: o PC achou vários programas parecidos ou nenhum; "choices" traz até 3 nomes para a Alexa falar. */
-const AckStatus = Object.freeze({ OK: 'ok', ERROR: 'error', AMBIGUOUS: 'ambiguous', NOT_FOUND: 'not_found' });
+/**
+ * ambiguous/not_found: o PC achou vários programas parecidos ou nenhum; "choices" traz até 3 nomes para a Alexa falar.
+ * pending: o Claude ainda está respondendo. pin_required/locked: a trava do Claude Code pede o PIN ou está bloqueada.
+ * "text" (opcional): resumo curto para a Alexa ler (resposta do Claude).
+ */
+const AckStatus = Object.freeze({
+    OK: 'ok',
+    ERROR: 'error',
+    AMBIGUOUS: 'ambiguous',
+    NOT_FOUND: 'not_found',
+    PENDING: 'pending',
+    PIN_REQUIRED: 'pin_required',
+    LOCKED: 'locked',
+});
+const MAX_ACK_TEXT_LENGTH = 600;
 const MAX_ACK_CHOICES = 3;
 const MAX_CHOICE_LENGTH = 60;
 
@@ -97,6 +110,11 @@ function isValidParams(params) {
     return entries.every(([name, value]) => PARAM_NAME_PATTERN.test(name) && isValidParamValue(value));
 }
 
+function isValidAckText(text) {
+    if (text === undefined) return true;
+    return typeof text === 'string' && text.length > 0 && text.length <= MAX_ACK_TEXT_LENGTH && !CONTROL_CHARACTERS.test(text);
+}
+
 function isValidChoices(choices) {
     if (choices === undefined) return true;
     return Array.isArray(choices)
@@ -112,7 +130,7 @@ function hasValidShape(message) {
         return ACTION_ID_PATTERN.test(message.actionId || '') && isValidParams(message.params);
     }
     if (message.type === MessageType.ACK) {
-        return Object.values(AckStatus).includes(message.status) && isValidChoices(message.choices);
+        return Object.values(AckStatus).includes(message.status) && isValidChoices(message.choices) && isValidAckText(message.text);
     }
     return false;
 }
@@ -123,9 +141,10 @@ function createCommand({ actionId, params = {} }, secret, now = Date.now()) {
     return { ...message, sig: computeSignature(message, secret) };
 }
 
-function createAck({ requestId, status, choices }, secret, now = Date.now()) {
+function createAck({ requestId, status, choices, text }, secret, now = Date.now()) {
     const message = { v: PROTOCOL_VERSION, type: MessageType.ACK, requestId, status, ts: now };
     if (choices !== undefined) message.choices = choices;
+    if (text !== undefined) message.text = text;
     if (!hasValidShape(message)) throw new ProtocolError('malformed');
     return { ...message, sig: computeSignature(message, secret) };
 }
@@ -186,6 +205,7 @@ module.exports = {
     AckStatus,
     MAX_ACK_CHOICES,
     MAX_CHOICE_LENGTH,
+    MAX_ACK_TEXT_LENGTH,
     ProtocolError,
     ACTION_ID_PATTERN,
     DEVICE_ID_PATTERN,
