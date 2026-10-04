@@ -65,6 +65,10 @@ function validateAction(action) {
         throw new CatalogError(`${action.id}: flags obrigatórias ausentes`);
     }
     if (action.voiceLocked !== undefined && typeof action.voiceLocked !== 'boolean') throw new CatalogError(`${action.id}: voiceLocked inválido`);
+    // "qual deles?": parâmetro que recebe a opção escolhida (padrão: "programa")
+    if (action.choiceParam !== undefined && !action.params.some((param) => param.name === action.choiceParam)) {
+        throw new CatalogError(`${action.id}: choiceParam não é um parâmetro da ação`);
+    }
     if (!Array.isArray(action.params)) throw new CatalogError(`${action.id}: params deve ser lista`);
     action.params.forEach((param) => validateParam(action.id, param));
 }

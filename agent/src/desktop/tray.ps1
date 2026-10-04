@@ -84,7 +84,9 @@ $routinesItem = $programsMenu.DropDownItems.Add('Gerar rotinas sugeridas do app 
 [void]$menu.Items.Add($programsMenu)
 $claudeMenu = New-Object System.Windows.Forms.ToolStripMenuItem 'Claude Code'
 $claudeAnswerItem = $claudeMenu.DropDownItems.Add('Abrir última resposta do Claude')
-$claudeFolderItem = $claudeMenu.DropDownItems.Add('Escolher pasta das ordens…')
+$claudeImportItem = $claudeMenu.DropDownItems.Add('Importar pastas do Claude Code')
+$claudeFoldersEditItem = $claudeMenu.DropDownItems.Add('Editar lista de pastas')
+$claudeFolderItem = $claudeMenu.DropDownItems.Add('Adicionar pasta (vira a padrão)…')
 $claudePinItem = $claudeMenu.DropDownItems.Add('Definir PIN…')
 $claudeLockItem = $claudeMenu.DropDownItems.Add('Encerrar sessão (pede o PIN de novo)')
 [void]$menu.Items.Add($claudeMenu)
@@ -110,6 +112,8 @@ $renameItem.add_Click({
 })
 $claudeAnswerItem.add_Click({ Send-Command 'claude_answer' })
 $claudeLockItem.add_Click({ Send-Command 'claude_lock' })
+$claudeImportItem.add_Click({ Send-Command 'claude_import' })
+$claudeFoldersEditItem.add_Click({ Send-Command 'claude_folders_edit' })
 $claudeFolderItem.add_Click({
     $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
     $dialog.Description = 'Pasta do projeto onde o Claude Code vai receber as ordens por voz'
@@ -117,7 +121,7 @@ $claudeFolderItem.add_Click({
 })
 $claudePinItem.add_Click({
     $pin = [Microsoft.VisualBasic.Interaction]::InputBox(
-        "PIN de 6 digitos para o Claude Code (nao pode comecar com 0).`nA Alexa vai pedir este PIN a cada 3 horas.",
+        "PIN de 4 a 8 dígitos para o Claude Code (pode começar com 0).`nEvite repetições e sequências como 1111 ou 1234.`nA Alexa vai pedir este PIN a cada 3 horas.",
         $AppName, '')
     $digits = ($pin -replace '[^0-9]', '')
     if ($digits) { Send-Command "claude_pin $digits" }

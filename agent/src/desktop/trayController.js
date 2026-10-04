@@ -23,6 +23,8 @@ const TrayCommand = Object.freeze({
     DEPLOY: 'deploy',
     CLAUDE_SET_PIN: 'claude_pin',
     CLAUDE_FOLDER: 'claude_folder',
+    CLAUDE_FOLDERS_IMPORT: 'claude_import',
+    CLAUDE_FOLDERS_EDIT: 'claude_folders_edit',
     CLAUDE_ANSWER: 'claude_answer',
     CLAUDE_LOCK: 'claude_lock',
 });

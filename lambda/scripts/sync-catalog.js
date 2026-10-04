@@ -36,12 +36,16 @@ function verbType(sourceCatalog) {
     return { name: 'TIPO_VERBO', values };
 }
 
+/** Exemplos do PIN falado: o slot é livre, a Lambda converte palavras em dígitos (pinParser). */
+const PIN_EXAMPLES = Object.freeze(['zero meia três um', 'um dois três quatro cinco', 'sete oito zero nove', 'meia meia dois um oito', 'quatro zero zero dois nove três']);
+
 function buildSlotTypes(sourceCatalog) {
     return [
         { name: 'TIPO_APLICATIVO', values: [...catalogValues(sourceCatalog, 'TIPO_APLICATIVO'), ...exampleValues(sourceCatalog)] },
         { name: 'TIPO_ROTINA', values: catalogValues(sourceCatalog, 'TIPO_ROTINA') },
         verbType(sourceCatalog),
         { name: 'TIPO_ESCOLHA', values: CHOICE_VALUES },
+        { name: 'TIPO_PIN', values: PIN_EXAMPLES.map((example) => ({ name: { value: example } })) },
     ];
 }
 

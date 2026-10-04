@@ -11,12 +11,12 @@ const Alexa = require('ask-sdk-core');
 const speech = require('../speech');
 const { resolveIntent, resolvePendingAction, revalidateParams, ResolutionFailure, isActionIntent } = require('../domain/actionResolver');
 const { pickChoice } = require('../domain/choiceResolver');
+const { parseSpokenPin } = require('../domain/pinParser');
 const { sendCommand, DeliveryResult } = require('../messaging/commandBus');
 
 const PENDING_ATTRIBUTE = 'pendingAction';
 const PENDING_CHOICE_ATTRIBUTE = 'pendingChoice';
 const PENDING_PIN_ATTRIBUTE = 'pendingPin';
-const PIN_DIGITS = 6;
 const MAX_PIN_REPROMPTS = 2;
 const CLAUDE_ANSWER_ACTION_ID = 'resposta_claude';
 const PENDING_CONFIRMATION_TTL_MS = 60 * 1000;
@@ -125,9 +125,10 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
 
     /** O PC achou vários parecidos (ou só parecidos): guarda as opções e pergunta qual. */
     function askWhichOne(handlerInput, action, params, result, choices) {
-        if (choices.length === 0) return speak(handlerInput, speech.PROGRAM_NOT_FOUND);
+        const isProject = action.choiceParam === 'projeto';
+        if (choices.length === 0) return speak(handlerInput, isProject ? speech.PROJECT_NOT_FOUND : speech.PROGRAM_NOT_FOUND);
         storePending(handlerInput, PENDING_CHOICE_ATTRIBUTE, { actionId: action.id, params, choices, expiresAt: clock() + PENDING_CONFIRMATION_TTL_MS });
-        return ask(handlerInput, result === DeliveryResult.AMBIGUOUS ? speech.whichOne(choices) : speech.didYouMean(choices));
+        return ask(handlerInput, result === DeliveryResult.AMBIGUOUS ? speech.whichOne(choices) : speech.didYouMean(choices, isProject ? 'projeto' : 'programa'));
     }
 
     /**
@@ -262,7 +263,10 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
                 : pickChoice(pending.choices, spokenSlotValue(handlerInput.requestEnvelope));
             const action = catalog.findById(pending.actionId);
             if (!chosen || !action) return speak(handlerInput, speech.CHOICE_NOT_UNDERSTOOD);
-            const resolution = revalidateParams(action, { ...pending.params, programa: chosen, exato: 1 });
+            // Programa escolhido vai com "exato"; outras escolhas (ex.: projeto do Claude Code) vão no parâmetro da ação.
+            const choiceParam = action.choiceParam || 'programa';
+            const choice = choiceParam === 'programa' ? { programa: chosen, exato: 1 } : { [choiceParam]: chosen };
+            const resolution = revalidateParams(action, { ...pending.params, ...choice });
             if (!resolution.ok) {
                 logger.info({ event: 'request_rejected', reason: resolution.reason });
                 return speak(handlerInput, speech.UNKNOWN_ACTION);
@@ -271,7 +275,7 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
         },
     };
 
-    /** Resposta ao pedido de PIN: só os dígitos falados contam ("um, dois, três…" chega como 123…). */
+    /** Resposta ao pedido de PIN: dígitos falados um a um ("zero, meia, três…"); 4 a 8 dígitos. */
     const pinHandler = {
         canHandle(handlerInput) {
             const { requestEnvelope } = handlerInput;
@@ -285,8 +289,8 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
             const pending = takePending(handlerInput, PENDING_PIN_ATTRIBUTE, clock);
             const action = pending && catalog.findById(pending.actionId);
             if (!action) return speak(handlerInput, speech.CONFIRMATION_EXPIRED);
-            const digits = String(spokenSlotValue(handlerInput.requestEnvelope) || '').replace(/\D/g, '');
-            if (digits.length !== PIN_DIGITS) {
+            const digits = parseSpokenPin(spokenSlotValue(handlerInput.requestEnvelope));
+            if (!digits) {
                 const reprompts = Number(pending.reprompts) || 0;
                 if (reprompts >= MAX_PIN_REPROMPTS) return speak(handlerInput, speech.CANCELLED_BY_USER);
                 storePending(handlerInput, PENDING_PIN_ATTRIBUTE, { ...pending, reprompts: reprompts + 1 });

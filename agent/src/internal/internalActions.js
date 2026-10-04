@@ -10,6 +10,7 @@ const { matchProgram, MatchStatus } = require('../programs/programMatcher');
 const { protocol } = require('../shared');
 const { LockStatus } = require('../claude/sessionLock');
 const { JobState } = require('../claude/claudeJobs');
+const { FolderStatus } = require('../claude/claudeFolders');
 
 const LOCK_RESULTS = Object.freeze({
     [LockStatus.PIN_REQUIRED]: { ok: false, status: protocol.AckStatus.PIN_REQUIRED },
@@ -53,10 +54,11 @@ function isHelperOk(reply) {
  * @param {object} deps.logger
  * @param {{ ask: Function, order: Function, lastAnswer: Function }} [deps.claudeJobs]
  * @param {{ check: Function, revoke: Function }} [deps.sessionLock]
+ * @param {{ resolve: Function }} [deps.claudeFolders]   lista privada de pastas do Claude Code
  * @param {(text: string) => void} [deps.notify]   balão perto do relógio
  */
 function createInternalRunner({
-    inputHelper, loadPrograms, launcher, logger, claudeJobs, sessionLock, notify = () => {}, setTimer = setTimeout, closeGraceMs = CLOSE_GRACE_MS,
+    inputHelper, loadPrograms, launcher, logger, claudeJobs, sessionLock, claudeFolders, notify = () => {}, setTimer = setTimeout, closeGraceMs = CLOSE_GRACE_MS,
 }) {
     async function helper(verb, argument) {
         const reply = await inputHelper.run(verb, argument);
@@ -126,11 +128,20 @@ function createInternalRunner({
             return { ok: false };
         }
         if (status !== LockStatus.OK) return LOCK_RESULTS[status];
+        // A pasta só é procurada DEPOIS do PIN: sem sessão ativa, nem os nomes dos projetos saem do PC.
+        const target = claudeFolders.resolve(params.ordem, params.projeto);
+        if (target.status === FolderStatus.NO_DEFAULT) {
+            notify('Marque uma pasta padrão do Claude Code (ícone do O Monstro → Claude Code → Editar lista de pastas).');
+            return { ok: false };
+        }
+        if (target.status !== FolderStatus.OK) {
+            return { ok: false, status: target.status, choices: speakableChoices(target.choices || []) };
+        }
         try {
-            claudeJobs.order(params.ordem);
+            claudeJobs.order(target.order, target.folder);
         } catch (error) {
             logger.warn({ event: 'claude_order_refused', code: error.code });
-            if (error.code === 'no_project_folder') notify('Escolha a pasta do Claude Code no ícone do O Monstro (menu Claude Code).');
+            if (error.code === 'no_project_folder') notify('A pasta do Claude Code não existe mais. Atualize a lista no ícone do O Monstro.');
             return { ok: false };
         }
         return { ok: true };
