@@ -6,7 +6,11 @@
             "description": "Abre a Netflix no navegador padrão",
             "spokenName": "a Netflix",
             "slotType": "TIPO_APLICATIVO",
-            "synonyms": ["netflix", "a netflix", "o netflix"],
+            "synonyms": [
+                "netflix",
+                "a netflix",
+                "o netflix"
+            ],
             "requiresConfirmation": false,
             "requiresDesktop": true,
             "params": []
@@ -16,7 +20,13 @@
             "description": "Bloqueia a tela do Windows",
             "spokenName": "bloquear a tela",
             "slotType": "TIPO_ROTINA",
-            "synonyms": ["bloquear a tela", "bloquear o computador", "bloquear o pc", "trancar o computador", "bloqueio de tela"],
+            "synonyms": [
+                "bloquear a tela",
+                "bloquear o computador",
+                "bloquear o pc",
+                "trancar o computador",
+                "bloqueio de tela"
+            ],
             "requiresConfirmation": false,
             "requiresDesktop": true,
             "params": []
@@ -29,7 +39,13 @@
             "requiresConfirmation": true,
             "requiresDesktop": false,
             "params": [
-                { "name": "minutos", "slot": "minutos", "type": "integer", "min": 1, "max": 240 }
+                {
+                    "name": "minutos",
+                    "slot": "minutos",
+                    "type": "integer",
+                    "min": 1,
+                    "max": 240
+                }
             ]
         },
         {
@@ -37,7 +53,12 @@
             "description": "Cancela um desligamento ou reinício agendado",
             "spokenName": "cancelar o desligamento",
             "slotType": "TIPO_ROTINA",
-            "synonyms": ["cancelar o desligamento", "cancelar desligamento", "não desligar", "cancelar o reinício"],
+            "synonyms": [
+                "cancelar o desligamento",
+                "cancelar desligamento",
+                "não desligar",
+                "cancelar o reinício"
+            ],
             "requiresConfirmation": false,
             "requiresDesktop": false,
             "params": []
@@ -47,7 +68,12 @@
             "description": "Reinicia o PC em 60 segundos",
             "spokenName": "reiniciar o computador",
             "slotType": "TIPO_ROTINA",
-            "synonyms": ["reiniciar o computador", "reiniciar o pc", "reiniciar", "reinício"],
+            "synonyms": [
+                "reiniciar o computador",
+                "reiniciar o pc",
+                "reiniciar",
+                "reinício"
+            ],
             "requiresConfirmation": true,
             "requiresDesktop": false,
             "params": []
@@ -57,10 +83,246 @@
             "description": "Roda a rotina de backup definida localmente",
             "spokenName": "o backup",
             "slotType": "TIPO_ROTINA",
-            "synonyms": ["backup", "o backup", "backup dos documentos", "fazer backup", "cópia de segurança"],
+            "synonyms": [
+                "backup",
+                "o backup",
+                "backup dos documentos",
+                "fazer backup",
+                "cópia de segurança"
+            ],
             "requiresConfirmation": true,
             "requiresDesktop": false,
             "params": []
+        },
+        {
+            "id": "pausar_continuar",
+            "description": "Pausa ou continua a mídia (menu de mídia do Windows)",
+            "spokenName": "pausar ou continuar",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": [
+                "pausar",
+                "pausa",
+                "pausar o vídeo",
+                "pausa o vídeo",
+                "pausar a música",
+                "continuar",
+                "continuar o vídeo",
+                "continua o vídeo",
+                "despausar",
+                "despausa",
+                "dar play",
+                "play",
+                "soltar o vídeo"
+            ],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "alternar_mudo",
+            "description": "Liga ou desliga o mudo do Windows",
+            "spokenName": "o mudo",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": [
+                "deixar mudo",
+                "mudo",
+                "ficar mudo",
+                "tirar o mudo",
+                "tira o mudo",
+                "mutar",
+                "desmutar",
+                "silenciar"
+            ],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "tela_cheia",
+            "description": "Tela cheia: F no navegador, F11 nos outros programas",
+            "spokenName": "tela cheia",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": [
+                "tela cheia",
+                "colocar em tela cheia",
+                "coloca em tela cheia",
+                "deixar em tela cheia",
+                "entrar em tela cheia"
+            ],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "sair_tela_cheia",
+            "description": "Sai da tela cheia: Esc no navegador, F11 nos outros programas",
+            "spokenName": "sair da tela cheia",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": [
+                "sair da tela cheia",
+                "sai da tela cheia",
+                "tirar da tela cheia",
+                "tira da tela cheia",
+                "sair do modo tela cheia"
+            ],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "pular",
+            "description": "Clica no botão Pular visível (anúncio, abertura) — experimental",
+            "spokenName": "pular",
+            "slotType": "TIPO_ROTINA",
+            "synonyms": [
+                "pular anúncio",
+                "pular o anúncio",
+                "pula o anúncio",
+                "pular propaganda",
+                "pular a propaganda",
+                "pular abertura",
+                "pular a abertura",
+                "pula a abertura",
+                "pular o início",
+                "pular a introdução",
+                "pular"
+            ],
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": []
+        },
+        {
+            "id": "aumentar_volume",
+            "description": "Aumenta o volume do Windows",
+            "spokenName": "aumentar o volume",
+            "intent": "AumentarVolumeIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "quantidade",
+                    "slot": "quantidade",
+                    "type": "integer",
+                    "min": 2,
+                    "max": 100,
+                    "default": 20,
+                    "unit": "por cento"
+                }
+            ]
+        },
+        {
+            "id": "abaixar_volume",
+            "description": "Abaixa o volume do Windows",
+            "spokenName": "abaixar o volume",
+            "intent": "AbaixarVolumeIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "quantidade",
+                    "slot": "quantidade",
+                    "type": "integer",
+                    "min": 2,
+                    "max": 100,
+                    "default": 20,
+                    "unit": "por cento"
+                }
+            ]
+        },
+        {
+            "id": "avancar_tempo",
+            "description": "Avança a mídia pelo tempo dito",
+            "spokenName": "avançar",
+            "intent": "AvancarIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "segundos",
+                    "slot": "tempo",
+                    "type": "duration",
+                    "min": 1,
+                    "max": 10800
+                }
+            ]
+        },
+        {
+            "id": "voltar_tempo",
+            "description": "Volta a mídia pelo tempo dito",
+            "spokenName": "voltar",
+            "intent": "VoltarIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "segundos",
+                    "slot": "tempo",
+                    "type": "duration",
+                    "min": 1,
+                    "max": 10800
+                }
+            ]
+        },
+        {
+            "id": "pesquisar_google",
+            "description": "Abre a pesquisa do Google no navegador padrão",
+            "spokenName": "pesquisar no Google",
+            "intent": "PesquisarIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "consulta",
+                    "slot": "consulta",
+                    "type": "text",
+                    "maxLength": 200
+                }
+            ]
+        },
+        {
+            "id": "abrir_programa",
+            "description": "Abre um programa da lista privada do PC",
+            "spokenName": "abrir o programa",
+            "intent": "AbrirAplicativoIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "programa",
+                    "slot": "aplicativo",
+                    "type": "program"
+                }
+            ]
+        },
+        {
+            "id": "fechar_programa",
+            "description": "Fecha um programa da lista privada do PC",
+            "spokenName": "fechar o programa",
+            "intent": "FecharAplicativoIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "programa",
+                    "slot": "aplicativo",
+                    "type": "program"
+                }
+            ]
+        },
+        {
+            "id": "destravar_programa",
+            "description": "Encerra à força e abre de novo um programa da lista",
+            "spokenName": "destravar o programa",
+            "intent": "DestravarAplicativoIntent",
+            "requiresConfirmation": false,
+            "requiresDesktop": true,
+            "params": [
+                {
+                    "name": "programa",
+                    "slot": "aplicativo",
+                    "type": "program"
+                }
+            ]
         }
     ]
 }

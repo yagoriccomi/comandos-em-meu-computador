@@ -1,15 +1,29 @@
 'use strict';
 /* Carrega e valida o catálogo público de ações (sem executáveis: isso só existe no PC). */
 const rawCatalog = require('../catalog/skill-catalog.json');
-const { ACTION_ID_PATTERN } = require('../protocol/message');
+const { ACTION_ID_PATTERN, MAX_TEXT_PARAM_LENGTH } = require('../protocol/message');
 
 const SUPPORTED_SLOT_TYPES = Object.freeze(['TIPO_APLICATIVO', 'TIPO_ROTINA']);
-const SUPPORTED_PARAM_TYPES = Object.freeze(['integer']);
+const ParamType = Object.freeze({
+    INTEGER: 'integer',   // AMAZON.NUMBER: inteiro dentro de min..max (com "default" opcional)
+    DURATION: 'duration', // AMAZON.DURATION (ISO 8601, ex.: PT1M30S) convertido em segundos, min..max
+    TEXT: 'text',         // AMAZON.SearchQuery: texto curto; NUNCA vira comando (só a URL codificada da pesquisa)
+    PROGRAM: 'program',   // id da lista PRIVADA de programas do PC (hash), vindo do slot de aplicativo
+});
+const SUPPORTED_PARAM_TYPES = Object.freeze(Object.values(ParamType));
+/** Id dos programas da lista privada do PC: "p" + 12 hex de um hash do nome (o nome nunca trafega). */
+const PROGRAM_ID_PATTERN = /^p[0-9a-f]{12}$/;
 
 class CatalogError extends Error {
     constructor(message) {
         super(message);
         this.name = 'CatalogError';
+    }
+}
+
+function assertRange(actionId, param) {
+    if (!Number.isSafeInteger(param.min) || !Number.isSafeInteger(param.max) || param.min > param.max) {
+        throw new CatalogError(`${actionId}: faixa inválida em ${param.name}`);
     }
 }
 
@@ -20,8 +34,14 @@ function validateParam(actionId, param) {
     if (!SUPPORTED_PARAM_TYPES.includes(param.type)) {
         throw new CatalogError(`${actionId}: tipo de parâmetro não suportado`);
     }
-    if (!Number.isSafeInteger(param.min) || !Number.isSafeInteger(param.max) || param.min > param.max) {
-        throw new CatalogError(`${actionId}: faixa inválida em ${param.name}`);
+    if (param.type === ParamType.INTEGER || param.type === ParamType.DURATION) assertRange(actionId, param);
+    if (param.default !== undefined
+        && (param.type !== ParamType.INTEGER || !Number.isSafeInteger(param.default) || param.default < param.min || param.default > param.max)) {
+        throw new CatalogError(`${actionId}: default inválido em ${param.name}`);
+    }
+    if (param.type === ParamType.TEXT
+        && (!Number.isSafeInteger(param.maxLength) || param.maxLength < 1 || param.maxLength > MAX_TEXT_PARAM_LENGTH)) {
+        throw new CatalogError(`${actionId}: maxLength inválido em ${param.name}`);
     }
 }
 
@@ -62,6 +82,8 @@ function buildCatalog(source) {
 
 module.exports = {
     SUPPORTED_SLOT_TYPES,
+    ParamType,
+    PROGRAM_ID_PATTERN,
     CatalogError,
     buildCatalog,
     catalog: buildCatalog(rawCatalog),

@@ -87,6 +87,193 @@
             "em {minutos} minutos",
             "daqui a {minutos} minutos"
           ]
+        },
+        {
+          "name": "AumentarVolumeIntent",
+          "slots": [
+            {
+              "name": "quantidade",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "aumentar o volume",
+            "aumentar o volume em {quantidade}",
+            "aumentar o volume em {quantidade} por cento",
+            "aumentar o volume {quantidade} por cento",
+            "aumentar {quantidade} por cento o volume",
+            "aumenta o volume",
+            "aumenta o volume em {quantidade}",
+            "aumenta o volume em {quantidade} por cento",
+            "aumenta o volume {quantidade} por cento",
+            "aumenta {quantidade} por cento o volume",
+            "subir o volume",
+            "subir o volume em {quantidade}",
+            "subir o volume em {quantidade} por cento",
+            "subir o volume {quantidade} por cento",
+            "subir {quantidade} por cento o volume",
+            "sobe o volume",
+            "sobe o volume em {quantidade}",
+            "sobe o volume em {quantidade} por cento",
+            "sobe o volume {quantidade} por cento",
+            "sobe {quantidade} por cento o volume",
+            "mais volume",
+            "mais alto"
+          ]
+        },
+        {
+          "name": "AbaixarVolumeIntent",
+          "slots": [
+            {
+              "name": "quantidade",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "abaixar o volume",
+            "abaixar o volume em {quantidade}",
+            "abaixar o volume em {quantidade} por cento",
+            "abaixar o volume {quantidade} por cento",
+            "abaixar {quantidade} por cento o volume",
+            "abaixa o volume",
+            "abaixa o volume em {quantidade}",
+            "abaixa o volume em {quantidade} por cento",
+            "abaixa o volume {quantidade} por cento",
+            "abaixa {quantidade} por cento o volume",
+            "diminuir o volume",
+            "diminuir o volume em {quantidade}",
+            "diminuir o volume em {quantidade} por cento",
+            "diminuir o volume {quantidade} por cento",
+            "diminuir {quantidade} por cento o volume",
+            "diminui o volume",
+            "diminui o volume em {quantidade}",
+            "diminui o volume em {quantidade} por cento",
+            "diminui o volume {quantidade} por cento",
+            "diminui {quantidade} por cento o volume",
+            "baixar o volume",
+            "baixar o volume em {quantidade}",
+            "baixar o volume em {quantidade} por cento",
+            "baixar o volume {quantidade} por cento",
+            "baixar {quantidade} por cento o volume",
+            "baixa o volume",
+            "baixa o volume em {quantidade}",
+            "baixa o volume em {quantidade} por cento",
+            "baixa o volume {quantidade} por cento",
+            "baixa {quantidade} por cento o volume",
+            "menos volume",
+            "mais baixo"
+          ]
+        },
+        {
+          "name": "AvancarIntent",
+          "slots": [
+            {
+              "name": "tempo",
+              "type": "AMAZON.DURATION"
+            }
+          ],
+          "samples": [
+            "avançar {tempo}",
+            "avançar o vídeo {tempo}",
+            "avançar o vídeo em {tempo}",
+            "avançar a música {tempo}",
+            "avança {tempo}",
+            "avança o vídeo {tempo}",
+            "avança o vídeo em {tempo}",
+            "avança a música {tempo}",
+            "adiantar {tempo}",
+            "adiantar o vídeo {tempo}",
+            "adiantar o vídeo em {tempo}",
+            "adiantar a música {tempo}",
+            "adianta {tempo}",
+            "adianta o vídeo {tempo}",
+            "adianta o vídeo em {tempo}",
+            "adianta a música {tempo}",
+            "avançar",
+            "avançar o vídeo"
+          ]
+        },
+        {
+          "name": "VoltarIntent",
+          "slots": [
+            {
+              "name": "tempo",
+              "type": "AMAZON.DURATION"
+            }
+          ],
+          "samples": [
+            "voltar {tempo}",
+            "voltar o vídeo {tempo}",
+            "voltar o vídeo em {tempo}",
+            "voltar a música {tempo}",
+            "volta {tempo}",
+            "volta o vídeo {tempo}",
+            "volta o vídeo em {tempo}",
+            "volta a música {tempo}",
+            "retroceder {tempo}",
+            "retroceder o vídeo {tempo}",
+            "retroceder o vídeo em {tempo}",
+            "retroceder a música {tempo}",
+            "retrocede {tempo}",
+            "retrocede o vídeo {tempo}",
+            "retrocede o vídeo em {tempo}",
+            "retrocede a música {tempo}",
+            "voltar o vídeo"
+          ]
+        },
+        {
+          "name": "PesquisarIntent",
+          "slots": [
+            {
+              "name": "consulta",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "pesquisar no google {consulta}",
+            "pesquisa no google {consulta}",
+            "pesquisar no google por {consulta}",
+            "procurar no google {consulta}",
+            "procura no google {consulta}",
+            "buscar no google {consulta}",
+            "busca no google {consulta}",
+            "pesquisar sobre {consulta}",
+            "pesquisar por {consulta}"
+          ]
+        },
+        {
+          "name": "FecharAplicativoIntent",
+          "slots": [
+            {
+              "name": "aplicativo",
+              "type": "TIPO_APLICATIVO"
+            }
+          ],
+          "samples": [
+            "fechar {aplicativo}",
+            "fecha {aplicativo}",
+            "feche {aplicativo}",
+            "encerrar {aplicativo}",
+            "encerra {aplicativo}",
+            "sair do {aplicativo}"
+          ]
+        },
+        {
+          "name": "DestravarAplicativoIntent",
+          "slots": [
+            {
+              "name": "aplicativo",
+              "type": "TIPO_APLICATIVO"
+            }
+          ],
+          "samples": [
+            "destravar {aplicativo}",
+            "destrava {aplicativo}",
+            "destrave {aplicativo}",
+            "reabrir {aplicativo}",
+            "reabre {aplicativo}",
+            "reiniciar o programa {aplicativo}"
+          ]
         }
       ],
       "types": [
@@ -151,6 +338,83 @@
                   "backup dos documentos",
                   "fazer backup",
                   "cópia de segurança"
+                ]
+              }
+            },
+            {
+              "id": "pausar_continuar",
+              "name": {
+                "value": "pausar",
+                "synonyms": [
+                  "pausa",
+                  "pausar o vídeo",
+                  "pausa o vídeo",
+                  "pausar a música",
+                  "continuar",
+                  "continuar o vídeo",
+                  "continua o vídeo",
+                  "despausar",
+                  "despausa",
+                  "dar play",
+                  "play",
+                  "soltar o vídeo"
+                ]
+              }
+            },
+            {
+              "id": "alternar_mudo",
+              "name": {
+                "value": "deixar mudo",
+                "synonyms": [
+                  "mudo",
+                  "ficar mudo",
+                  "tirar o mudo",
+                  "tira o mudo",
+                  "mutar",
+                  "desmutar",
+                  "silenciar"
+                ]
+              }
+            },
+            {
+              "id": "tela_cheia",
+              "name": {
+                "value": "tela cheia",
+                "synonyms": [
+                  "colocar em tela cheia",
+                  "coloca em tela cheia",
+                  "deixar em tela cheia",
+                  "entrar em tela cheia"
+                ]
+              }
+            },
+            {
+              "id": "sair_tela_cheia",
+              "name": {
+                "value": "sair da tela cheia",
+                "synonyms": [
+                  "sai da tela cheia",
+                  "tirar da tela cheia",
+                  "tira da tela cheia",
+                  "sair do modo tela cheia"
+                ]
+              }
+            },
+            {
+              "id": "pular",
+              "name": {
+                "value": "pular anúncio",
+                "synonyms": [
+                  "pular o anúncio",
+                  "pula o anúncio",
+                  "pular propaganda",
+                  "pular a propaganda",
+                  "pular abertura",
+                  "pular a abertura",
+                  "pula a abertura",
+                  "pular o início",
+                  "pular a introdução",
+                  "pular"
                 ]
               }
             }

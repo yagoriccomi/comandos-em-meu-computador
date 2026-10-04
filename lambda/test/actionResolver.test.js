@@ -75,3 +75,84 @@ test('shouldReportMissingShutdownMinutes', () => {
     assert.equal(result.reason, ResolutionFailure.MISSING_PARAM);
     assert.equal(result.missingSlot, 'minutos');
 });
+
+// ---- Tipos novos: duração, texto, programa da lista privada e inteiro com default ----
+const { parseIsoDurationSeconds, resolvePendingAction } = require('../domain/actionResolver');
+
+const PROGRAM_ID = 'p0123456789ab';
+
+function intentWith(name, slots) {
+    return { name, slots };
+}
+
+test('shouldConvertSpokenDurationToSeconds', () => {
+    assert.equal(parseIsoDurationSeconds('PT30S'), 30);
+    assert.equal(parseIsoDurationSeconds('PT1M30S'), 90);
+    assert.equal(parseIsoDurationSeconds('PT2H'), 7200);
+    for (const invalid of ['P1D', 'PT', 'PT1.5M', '30', 'PT1M30S; shutdown', '']) {
+        assert.equal(parseIsoDurationSeconds(invalid), undefined, invalid);
+    }
+});
+
+test('shouldResolveSeekWithDurationInSeconds', () => {
+    const result = resolveIntent(intentWith('AvancarIntent', { tempo: { name: 'tempo', value: 'PT2M' } }), catalog);
+    assert.equal(result.action.id, 'avancar_tempo');
+    assert.deepEqual(result.params, { segundos: 120 });
+});
+
+test('shouldAskForTimeWhenSeekHasNoDuration', () => {
+    const result = resolveIntent(intentWith('VoltarIntent', { tempo: { name: 'tempo' } }), catalog);
+    assert.equal(result.reason, ResolutionFailure.MISSING_PARAM);
+});
+
+test('shouldRejectDurationOutOfRange', () => {
+    const result = resolveIntent(intentWith('VoltarIntent', { tempo: { name: 'tempo', value: 'PT4H' } }), catalog);
+    assert.equal(result.reason, ResolutionFailure.INVALID_PARAM);
+});
+
+test('shouldUseDefaultVolumeStepWhenNoNumberIsSpoken', () => {
+    const result = resolveIntent(intentWith('AumentarVolumeIntent', { quantidade: { name: 'quantidade' } }), catalog);
+    assert.deepEqual([result.action.id, result.params], ['aumentar_volume', { quantidade: 20 }]);
+    const spoken = resolveIntent(intentWith('AbaixarVolumeIntent', { quantidade: { name: 'quantidade', value: '40' } }), catalog);
+    assert.deepEqual(spoken.params, { quantidade: 40 });
+});
+
+test('shouldKeepSearchTextAndRejectLongOrControlText', () => {
+    const ok = resolveIntent(intentWith('PesquisarIntent', { consulta: { name: 'consulta', value: '  receita de bolo  ' } }), catalog);
+    assert.deepEqual(ok.params, { consulta: 'receita de bolo' });
+    for (const value of ['x'.repeat(201), 'linha\nnova']) {
+        const result = resolveIntent(intentWith('PesquisarIntent', { consulta: { name: 'consulta', value } }), catalog);
+        assert.equal(result.reason, ResolutionFailure.INVALID_PARAM);
+    }
+});
+
+test('shouldMapPrivateProgramToOpenCloseAndUnlockActions', () => {
+    const slots = slotWithMatch('aplicativo', 'discord', PROGRAM_ID);
+    for (const [intentName, actionId] of [
+        ['AbrirAplicativoIntent', 'abrir_programa'],
+        ['FecharAplicativoIntent', 'fechar_programa'],
+        ['DestravarAplicativoIntent', 'destravar_programa'],
+    ]) {
+        const result = resolveIntent(intentWith(intentName, slots), catalog);
+        assert.deepEqual([result.action.id, result.params], [actionId, { programa: PROGRAM_ID }], intentName);
+    }
+});
+
+test('shouldStillOpenCatalogAppThroughAppIntent', () => {
+    const result = resolveIntent(intentWith('AbrirAplicativoIntent', slotWithMatch('aplicativo', 'netflix', 'abrir_netflix')), catalog);
+    assert.equal(result.action.id, 'abrir_netflix');
+});
+
+test('shouldNotCloseCatalogAppOrUnknownProgram', () => {
+    for (const slots of [slotWithMatch('aplicativo', 'netflix', 'abrir_netflix'), slotWithMatch('aplicativo', 'xyz', undefined),
+        slotWithMatch('aplicativo', 'x', 'p12; del'), { aplicativo: { name: 'aplicativo' } }]) {
+        const result = resolveIntent(intentWith('FecharAplicativoIntent', slots), catalog);
+        assert.equal(result.reason, ResolutionFailure.UNKNOWN_ACTION);
+    }
+});
+
+test('shouldRevalidatePendingTextAndProgramValues', () => {
+    // As ações de texto/programa não pedem confirmação: pendência forjada com elas é recusada.
+    const forged = resolvePendingAction({ actionId: 'pesquisar_google', params: { consulta: 'x' } }, catalog);
+    assert.equal(forged.reason, ResolutionFailure.UNKNOWN_ACTION);
+});

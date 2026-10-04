@@ -220,3 +220,31 @@ test('shouldNotEchoUnknownIntentName', async () => {
     const response = await skill.invoke(intentRequest('AMAZON.FallbackIntent'));
     assert.equal(speechOf(response), 'Não conheço essa ação.');
 });
+
+test('shouldSendSearchTextSignedToAgentWithoutLoggingIt', async () => {
+    const { skill, executed, logs } = await buildSkill({ agentStatus: 'ok' });
+    const response = await skill.invoke(intentRequest('PesquisarIntent', { consulta: { name: 'consulta', value: 'meu segredo de pesquisa' } }));
+    assert.equal(speechOf(response), 'Feito.');
+    assert.deepEqual(executed, [{ actionId: 'pesquisar_google', params: { consulta: 'meu segredo de pesquisa' } }]);
+    assert.ok(!JSON.stringify(logs).includes('segredo'), 'o texto da pesquisa nunca vai para o log');
+});
+
+test('shouldAskWhatToSearchWhenQueryIsMissing', async () => {
+    const { skill, broker } = await buildSkill({ agentStatus: 'ok' });
+    const response = await skill.invoke(intentRequest('PesquisarIntent', { consulta: { name: 'consulta' } }));
+    assert.equal(speechOf(response), 'O que você quer pesquisar?');
+    assert.equal(response.response.shouldEndSession, false);
+    assert.equal(broker.published.length, 0);
+});
+
+test('shouldRaiseVolumeByDefaultStep', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: 'ok' });
+    await skill.invoke(intentRequest('AumentarVolumeIntent', { quantidade: { name: 'quantidade' } }));
+    assert.deepEqual(executed, [{ actionId: 'aumentar_volume', params: { quantidade: 20 } }]);
+});
+
+test('shouldCloseProgramFromPrivateList', async () => {
+    const { skill, executed } = await buildSkill({ agentStatus: 'ok' });
+    await skill.invoke(intentRequest('FecharAplicativoIntent', matchedSlot('aplicativo', 'edge', 'p00112233aabb')));
+    assert.deepEqual(executed, [{ actionId: 'fechar_programa', params: { programa: 'p00112233aabb' } }]);
+});
