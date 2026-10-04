@@ -18,6 +18,7 @@ const localActions = buildLocalActions({ actions: [
     { id: 'cancelar_desligamento', executable: 'C:\\Windows\\System32\\shutdown.exe', args: ['/a'], enabled: true },
     { id: 'abrir_netflix', executable: 'C:\\Windows\\explorer.exe', args: ['https://www.netflix.com'], enabled: true },
     { id: 'reiniciar_pc', enabled: false },
+    { id: 'abrir_programa', interno: true, enabled: true },
 ] }, publicCatalog, { checkFileExists: false });
 
 async function startAgent({ paused = false, desktopResult = { ok: true } } = {}) {
@@ -100,4 +101,19 @@ test('shouldRejectSignedCommandWithOutOfRangeParam', async () => {
     const { alexa, executed } = await startAgent();
     assert.equal((await alexa('desligar_em_minutos', { minutos: 999 })).result, DeliveryResult.FAILED);
     assert.equal(executed.length, 0);
+});
+
+test('shouldCarryProgramChoicesFromDesktopToAlexa', async () => {
+    const desktopResult = { ok: false, status: 'ambiguous', choices: ['Cloudflare WARP', 'Cloudflare One'] };
+    const { alexa, desktopCalls } = await startAgent({ desktopResult });
+    const reply = await alexa('abrir_programa', { programa: 'cloudflare', verbo: 'abrir', exato: 0 });
+    assert.equal(reply.result, DeliveryResult.AMBIGUOUS);
+    assert.deepEqual(reply.choices, ['Cloudflare WARP', 'Cloudflare One']);
+    assert.deepEqual(desktopCalls, [{ actionId: 'abrir_programa', params: { programa: 'cloudflare', verbo: 'abrir', exato: 0 } }]);
+});
+
+test('shouldPassFreePhraseVerbToDesktop', async () => {
+    const { alexa, desktopCalls } = await startAgent();
+    await alexa('abrir_programa', { programa: 'x', verbo: '*', exato: 0 });
+    assert.equal(desktopCalls[0].params.verbo, '*');
 });

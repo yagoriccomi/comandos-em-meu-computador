@@ -3,7 +3,7 @@
  * Revalida no PC os parâmetros recebidos (a mensagem já veio assinada, mas o agente não confia em nada):
  * exatamente os declarados no catálogo público, cada um válido para o seu tipo.
  */
-const { protocol, ParamType, PROGRAM_ID_PATTERN } = require('../shared');
+const { protocol, ParamType, VERB_PATTERN } = require('../shared');
 
 function isValidValue(param, value) {
     switch (param.type) {
@@ -12,8 +12,8 @@ function isValidValue(param, value) {
             return Number.isSafeInteger(value) && value >= param.min && value <= param.max;
         case ParamType.TEXT:
             return protocol.isValidTextParam(value) && value.length <= param.maxLength;
-        case ParamType.PROGRAM:
-            return typeof value === 'string' && PROGRAM_ID_PATTERN.test(value);
+        case ParamType.VERB:
+            return typeof value === 'string' && VERB_PATTERN.test(value);
         default:
             return false;
     }

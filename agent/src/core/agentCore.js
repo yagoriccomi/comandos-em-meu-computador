@@ -17,9 +17,11 @@ const { protocol } = require('../shared');
  * @param {object} deps.logger
  */
 function createAgentCore({ config, transport, guard, localActions, executor, desktopBridge, pauseState, logger, clock = Date.now }) {
-    async function sendAck(requestId, ok) {
-        const status = ok ? protocol.AckStatus.OK : protocol.AckStatus.ERROR;
-        const ack = protocol.createAck({ requestId, status }, config.hmacSecret, clock());
+    /** ok → "ok"; busca de programa sem vencedor → "ambiguous"/"not_found" com opções; resto → "error". */
+    async function sendAck(requestId, result) {
+        let reply = { status: result.ok ? protocol.AckStatus.OK : protocol.AckStatus.ERROR };
+        if (!result.ok && result.status) reply = { status: result.status, choices: result.choices || [] };
+        const ack = protocol.createAck({ requestId, ...reply }, config.hmacSecret, clock());
         await transport.publish(protocol.ackTopic(config.deviceId), protocol.serialize(ack));
     }
 
@@ -38,7 +40,7 @@ function createAgentCore({ config, transport, guard, localActions, executor, des
         if (!inspection.ok) {
             logger.warn({ event: 'command_rejected', reason: inspection.reason });
             // Só responde a mensagens autênticas; mensagens forjadas não recebem nenhum retorno.
-            if (inspection.command) await sendAck(inspection.command.requestId, false);
+            if (inspection.command) await sendAck(inspection.command.requestId, { ok: false });
             return;
         }
         const { command } = inspection;
@@ -50,7 +52,7 @@ function createAgentCore({ config, transport, guard, localActions, executor, des
             logger.error({ event: 'command_crashed', actionId: command.actionId, errorName: error.name });
         }
         logger.info({ event: 'command_handled', actionId: command.actionId, requestId: command.requestId, ok: result.ok, reason: result.reason });
-        await sendAck(command.requestId, result.ok);
+        await sendAck(command.requestId, result);
     }
 
     return {

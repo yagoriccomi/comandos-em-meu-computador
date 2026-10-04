@@ -135,7 +135,12 @@ function createInputHelper({ scriptPath, logger, spawn = childProcess.spawn, tim
     return {
         /** @returns {Promise<string>} "ok…" ou "erro <código>"; nunca rejeita por falha do script */
         run(verb, argument) {
-            const line = formatCommand(verb, argument);
+            let line;
+            try {
+                line = formatCommand(verb, argument);
+            } catch (error) {
+                return Promise.reject(error);
+            }
             const result = queue.then(() => send(line)).catch((error) => `erro ${error.code || 'helper_unavailable'}`);
             queue = result.then(() => undefined);
             return result;
