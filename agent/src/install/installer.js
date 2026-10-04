@@ -244,6 +244,7 @@ async function runInstall(argv) {
         prompt.say('\nParando o agente, se estiver rodando…');
         tasks.stopTask(tasks.CORE_TASK);
         tasks.stopTask(tasks.DESKTOP_TASK);
+        stopRunningAgentProcesses();
 
         // Permissões antes de ler a configuração: se estiverem quebradas, o config.json existente ficaria
         // ilegível e a pergunta "manter configuração" nem apareceria.
@@ -292,6 +293,24 @@ async function runInstall(argv) {
     }
 }
 
+/**
+ * Parar a tarefa agendada não encerra a sessão do desktop (aberta via conhost no logon): sem isto o node.exe
+ * instalado continua em uso e a cópia falha com EBUSY. Encerra só processos do node.exe DESTA instalação.
+ */
+function stopRunningAgentProcesses() {
+    const command = [
+        `$installed = ${quotePowerShell(paths.INSTALLED_NODE)}`,
+        'Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $installed } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }',
+        '$deadline = (Get-Date).AddSeconds(10)',
+        'while ((Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $installed }) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 300 }',
+    ].join('; ');
+    try {
+        childProcess.execFileSync(POWERSHELL_EXE, ['-NoProfile', '-NonInteractive', '-Command', command], { stdio: 'ignore', windowsHide: true });
+    } catch (error) {
+        // Se ainda houver arquivo preso, a cópia abaixo mostra o erro com clareza.
+    }
+}
+
 function deleteTaskFolder() {
     const command = `$s = New-Object -ComObject Schedule.Service; $s.Connect(); $s.GetFolder('\\').DeleteFolder(${quotePowerShell(tasks.TASK_FOLDER)}, 0)`;
     try {
@@ -328,6 +347,7 @@ async function runUninstall() {
             tasks.stopTask(taskName);
             tasks.deleteTask(taskName);
         }
+        stopRunningAgentProcesses();
         deleteTaskFolder();
         if (removeData) fs.rmSync(paths.DATA_DIR, { recursive: true, force: true });
         removeInstallDirectory();
