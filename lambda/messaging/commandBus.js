@@ -12,6 +12,15 @@ const DeliveryResult = Object.freeze({
     DONE: 'done',
     FAILED: 'failed',
     NO_ANSWER: 'no_answer',
+    AMBIGUOUS: 'ambiguous',
+    NOT_FOUND: 'not_found',
+});
+
+const RESULT_BY_ACK_STATUS = Object.freeze({
+    [protocol.AckStatus.OK]: DeliveryResult.DONE,
+    [protocol.AckStatus.ERROR]: DeliveryResult.FAILED,
+    [protocol.AckStatus.AMBIGUOUS]: DeliveryResult.AMBIGUOUS,
+    [protocol.AckStatus.NOT_FOUND]: DeliveryResult.NOT_FOUND,
 });
 
 /**
@@ -20,13 +29,13 @@ const DeliveryResult = Object.freeze({
  * @param {{ deviceId: string, hmacSecret: string }} options.secrets
  * @param {string} options.actionId
  * @param {object} [options.params]
- * @returns {Promise<{ result: string, requestId: string }>}
+ * @returns {Promise<{ result: string, requestId: string, choices: string[] }>}
  */
 async function sendCommand({ transport, secrets, actionId, params = {}, timeoutMs = ACK_TIMEOUT_MS, clock = Date.now }) {
     const command = protocol.createCommand({ actionId, params }, secrets.hmacSecret, clock());
     let settle;
     const answer = new Promise((resolve) => { settle = resolve; });
-    const timer = setTimeout(() => settle(DeliveryResult.NO_ANSWER), timeoutMs);
+    const timer = setTimeout(() => settle({ result: DeliveryResult.NO_ANSWER, choices: [] }), timeoutMs);
 
     const onAck = (raw) => {
         let ack;
@@ -40,13 +49,14 @@ async function sendCommand({ transport, secrets, actionId, params = {}, timeoutM
             return; // ack forjado, velho ou de outro formato: ignora e continua esperando
         }
         if (ack.requestId !== command.requestId) return;
-        settle(ack.status === protocol.AckStatus.OK ? DeliveryResult.DONE : DeliveryResult.FAILED);
+        settle({ result: RESULT_BY_ACK_STATUS[ack.status], choices: ack.choices || [] });
     };
 
     try {
         await transport.subscribe(protocol.ackTopic(secrets.deviceId), onAck);
         await transport.publish(protocol.commandTopic(secrets.deviceId), protocol.serialize(command));
-        return { result: await answer, requestId: command.requestId };
+        const { result, choices } = await answer;
+        return { result, choices, requestId: command.requestId };
     } finally {
         clearTimeout(timer);
     }

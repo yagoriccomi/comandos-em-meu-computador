@@ -59,7 +59,10 @@ test('shouldRejectCommandFromTheFuture', () => {
 
 test('shouldRejectUnknownProtocolVersion', () => {
     const command = protocol.createCommand({ actionId: 'abrir_netflix' }, SECRET, NOW);
-    assertRejectedWith('unsupported_version', () => verifyCommand({ ...command, v: 2 }));
+    assert.equal(command.v, 2);
+    for (const v of [1, 3]) {
+        assertRejectedWith('unsupported_version', () => verifyCommand({ ...command, v }));
+    }
 });
 
 test('shouldRejectAckWhenCommandWasExpected', () => {
@@ -72,11 +75,19 @@ test('shouldRejectActionIdWithShellCharacters', () => {
     assertRejectedWith('malformed', () => protocol.createCommand({ actionId: 'abrir & del' }, SECRET, NOW));
 });
 
-test('shouldRejectNonIntegerOrTextParams', () => {
-    for (const minutos of [2.5, '30', '30; shutdown /s', null, Number.NaN]) {
+test('shouldRejectParamsThatAreNeitherIntegerNorShortText', () => {
+    const tooLong = 'x'.repeat(protocol.MAX_TEXT_PARAM_LENGTH + 1);
+    for (const minutos of [2.5, null, Number.NaN, '', tooLong, 'linha\nnova', 'nulo\u0000', true, [1], { a: 1 }]) {
         assertRejectedWith('malformed', () =>
             protocol.createCommand({ actionId: 'desligar_em_minutos', params: { minutos } }, SECRET, NOW));
     }
+});
+
+test('shouldCarrySignedShortTextParam', () => {
+    const command = protocol.createCommand({ actionId: 'pesquisar_google', params: { consulta: 'receita de pão & café' } }, SECRET, NOW);
+    const verified = verifyCommand(protocol.parse(protocol.serialize(command)));
+    assert.equal(verified.params.consulta, 'receita de pão & café');
+    assertRejectedWith('bad_signature', () => verifyCommand({ ...command, params: { consulta: 'outra coisa' } }));
 });
 
 test('shouldRejectOversizedPayload', () => {

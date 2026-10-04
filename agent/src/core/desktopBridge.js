@@ -4,6 +4,20 @@
  * a ela as ações que precisam de tela e recebe comandos do ícone (pausar, retomar, desligar).
  */
 const net = require('net');
+const { protocol } = require('../shared');
+
+const LOOKUP_STATUSES = Object.freeze([protocol.AckStatus.AMBIGUOUS, protocol.AckStatus.NOT_FOUND]);
+
+/** Resultado vindo da sessão: ok, ou ambiguous/not_found com opções que o protocolo aceita. */
+function sanitizeResult(message) {
+    if (message.ok === true) return { ok: true };
+    if (!LOOKUP_STATUSES.includes(message.status)) return { ok: false };
+    const choices = Array.isArray(message.choices)
+        ? message.choices.filter((choice) => protocol.isValidTextParam(choice) && choice.length <= protocol.MAX_CHOICE_LENGTH)
+            .slice(0, protocol.MAX_ACK_CHOICES)
+        : [];
+    return { ok: false, status: message.status, choices };
+}
 const { MAX_SYNC_TIMEOUT_MS } = require('../config/localActions');
 const {
     HANDSHAKE_TIMEOUT_MS, ChannelMessage, ProofRole, createNonce, computeProof, proofMatches, attachLineChannel, listenOnLoopback,
@@ -30,7 +44,7 @@ function createDesktopBridge({ endpointFile, pipeSecret, logger, getStatus, onPa
 
     function handleSessionMessage(message) {
         if (message.type === ChannelMessage.RESULT && pending.has(message.id)) {
-            pending.get(message.id)({ ok: message.ok === true });
+            pending.get(message.id)(sanitizeResult(message));
             pending.delete(message.id);
         } else if (message.type === ChannelMessage.PAUSE || message.type === ChannelMessage.RESUME) {
             onPauseChange(message.type === ChannelMessage.PAUSE);
@@ -99,7 +113,7 @@ function createDesktopBridge({ endpointFile, pipeSecret, logger, getStatus, onPa
         }),
         publishStatus,
         isConnected: () => Boolean(session),
-        /** @returns {Promise<{ ok: boolean, reason?: string }>} nunca rejeita */
+        /** @returns {Promise<{ ok: boolean, reason?: string, status?: string, choices?: string[] }>} nunca rejeita */
         execute(actionId, params) {
             if (!session) return Promise.resolve({ ok: false, reason: 'no_desktop_session' });
             const id = nextRequestId++;

@@ -9,13 +9,17 @@
 const crypto = require('crypto');
 const Alexa = require('ask-sdk-core');
 const speech = require('../speech');
-const { resolveIntent, resolvePendingAction, ResolutionFailure, isActionIntent } = require('../domain/actionResolver');
+const { resolveIntent, resolvePendingAction, revalidateParams, ResolutionFailure, isActionIntent } = require('../domain/actionResolver');
+const { pickChoice } = require('../domain/choiceResolver');
 const { sendCommand, DeliveryResult } = require('../messaging/commandBus');
 
 const PENDING_ATTRIBUTE = 'pendingAction';
+const PENDING_CHOICE_ATTRIBUTE = 'pendingChoice';
 const PENDING_CONFIRMATION_TTL_MS = 60 * 1000;
 const YES_INTENT = 'AMAZON.YesIntent';
 const NO_INTENT = 'AMAZON.NoIntent';
+/** Durante a pergunta "qual deles?", estes intents NÃO são resposta (cancelar, parar, ajuda). */
+const NOT_A_CHOICE_INTENTS = Object.freeze(['AMAZON.CancelIntent', 'AMAZON.StopIntent', 'AMAZON.HelpIntent', 'AMAZON.NavigateHomeIntent', NO_INTENT]);
 
 function hashUserId(userId) {
     return crypto.createHash('sha256').update(String(userId)).digest('hex');
@@ -47,17 +51,38 @@ function ask(handlerInput, question) {
     return handlerInput.responseBuilder.speak(question).reprompt(question).withShouldEndSession(false).getResponse();
 }
 
-function takePendingAction(handlerInput, clock) {
+function takePending(handlerInput, attributeName, clock) {
     const attributes = handlerInput.attributesManager.getSessionAttributes();
-    const pending = attributes[PENDING_ATTRIBUTE];
-    delete attributes[PENDING_ATTRIBUTE];
+    const pending = attributes[attributeName];
+    delete attributes[attributeName];
     handlerInput.attributesManager.setSessionAttributes(attributes);
     if (!pending || !Number.isSafeInteger(pending.expiresAt) || pending.expiresAt < clock()) return undefined;
     return pending;
 }
 
+function takePendingAction(handlerInput, clock) {
+    return takePending(handlerInput, PENDING_ATTRIBUTE, clock);
+}
+
+function storePending(handlerInput, attributeName, value) {
+    const attributes = handlerInput.attributesManager.getSessionAttributes();
+    attributes[attributeName] = value;
+    handlerInput.attributesManager.setSessionAttributes(attributes);
+}
+
+function hasPending(handlerInput, attributeName) {
+    return Boolean(handlerInput.attributesManager.getSessionAttributes()[attributeName]);
+}
+
 function hasPendingAction(handlerInput) {
-    return Boolean(handlerInput.attributesManager.getSessionAttributes()[PENDING_ATTRIBUTE]);
+    return hasPending(handlerInput, PENDING_ATTRIBUTE);
+}
+
+/** Primeiro valor falado em qualquer slot do intent (a resposta à pergunta "qual deles?"). */
+function spokenSlotValue(requestEnvelope) {
+    const slots = (requestEnvelope.request.intent && requestEnvelope.request.intent.slots) || {};
+    const filled = Object.values(slots).find((slot) => slot && typeof slot.value === 'string' && slot.value.trim());
+    return filled ? filled.value : undefined;
 }
 
 function answerResolutionFailure(handlerInput, resolution) {
@@ -88,12 +113,24 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
         return undefined;
     }
 
+    /** O PC achou vários parecidos (ou só parecidos): guarda as opções e pergunta qual. */
+    function askWhichOne(handlerInput, action, params, result, choices) {
+        if (choices.length === 0) return speak(handlerInput, speech.PROGRAM_NOT_FOUND);
+        storePending(handlerInput, PENDING_CHOICE_ATTRIBUTE, { actionId: action.id, params, choices, expiresAt: clock() + PENDING_CONFIRMATION_TTL_MS });
+        return ask(handlerInput, result === DeliveryResult.AMBIGUOUS ? speech.whichOne(choices) : speech.didYouMean(choices));
+    }
+
     async function execute(handlerInput, secrets, action, params) {
         const transport = await connectTransport(secrets.mqtt);
         try {
-            const { result, requestId } = await sendCommand({ transport, secrets, actionId: action.id, params });
+            const { result, requestId, choices } = await sendCommand({ transport, secrets, actionId: action.id, params });
+            // Só códigos no log: nunca o nome falado, o texto da pesquisa ou as opções.
             logger.info({ event: 'action_result', actionId: action.id, requestId, result });
-            return speak(handlerInput, result === DeliveryResult.DONE ? speech.DONE : speech.FAILED);
+            if (result === DeliveryResult.DONE) return speak(handlerInput, speech.DONE);
+            if (result === DeliveryResult.AMBIGUOUS || result === DeliveryResult.NOT_FOUND) {
+                return askWhichOne(handlerInput, action, params, result, choices);
+            }
+            return speak(handlerInput, speech.FAILED);
         } finally {
             await transport.close().catch(() => {});
         }
@@ -149,14 +186,44 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
     };
 
     const confirmNoHandler = {
-        canHandle: (handlerInput) => isIntentRequest(handlerInput, NO_INTENT) && hasPendingAction(handlerInput),
+        canHandle: (handlerInput) => isIntentRequest(handlerInput, NO_INTENT)
+            && (hasPendingAction(handlerInput) || hasPending(handlerInput, PENDING_CHOICE_ATTRIBUTE)),
         handle(handlerInput) {
             takePendingAction(handlerInput, clock);
+            takePending(handlerInput, PENDING_CHOICE_ATTRIBUTE, clock);
             return speak(handlerInput, speech.CANCELLED_BY_USER);
         },
     };
 
-    return [actionHandler, confirmYesHandler, confirmNoHandler];
+    /** Resposta a "Encontrei X e Y. Qual deles?": "o segundo", o nome, ou "sim" quando havia uma só opção. */
+    const choiceHandler = {
+        canHandle(handlerInput) {
+            const { requestEnvelope } = handlerInput;
+            return Alexa.getRequestType(requestEnvelope) === 'IntentRequest'
+                && hasPending(handlerInput, PENDING_CHOICE_ATTRIBUTE)
+                && !NOT_A_CHOICE_INTENTS.includes(Alexa.getIntentName(requestEnvelope));
+        },
+        async handle(handlerInput) {
+            const secrets = await authorize(handlerInput);
+            if (!secrets) return speak(handlerInput, speech.FAILED);
+            const pending = takePending(handlerInput, PENDING_CHOICE_ATTRIBUTE, clock);
+            if (!pending || !Array.isArray(pending.choices)) return speak(handlerInput, speech.CONFIRMATION_EXPIRED);
+            const isYes = Alexa.getIntentName(handlerInput.requestEnvelope) === YES_INTENT;
+            const chosen = isYes && pending.choices.length === 1
+                ? pending.choices[0]
+                : pickChoice(pending.choices, spokenSlotValue(handlerInput.requestEnvelope));
+            const action = catalog.findById(pending.actionId);
+            if (!chosen || !action) return speak(handlerInput, speech.CHOICE_NOT_UNDERSTOOD);
+            const resolution = revalidateParams(action, { ...pending.params, programa: chosen, exato: 1 });
+            if (!resolution.ok) {
+                logger.info({ event: 'request_rejected', reason: resolution.reason });
+                return speak(handlerInput, speech.UNKNOWN_ACTION);
+            }
+            return execute(handlerInput, secrets, resolution.action, resolution.params);
+        },
+    };
+
+    return [choiceHandler, actionHandler, confirmYesHandler, confirmNoHandler];
 }
 
-module.exports = { createActionHandlers, hashUserId, PENDING_ATTRIBUTE, PENDING_CONFIRMATION_TTL_MS };
+module.exports = { createActionHandlers, hashUserId, PENDING_ATTRIBUTE, PENDING_CHOICE_ATTRIBUTE, PENDING_CONFIRMATION_TTL_MS };

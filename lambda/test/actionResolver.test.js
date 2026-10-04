@@ -36,19 +36,13 @@ test('shouldMapRoutineSlotToActionId', () => {
     assert.equal(result.action.id, 'backup_documentos');
 });
 
-test('shouldRejectSpokenValueWithoutCatalogMatch', () => {
-    const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', 'cmd /c del', undefined) }, catalog);
-    assert.deepEqual(result, { ok: false, reason: ResolutionFailure.UNKNOWN_ACTION });
-});
-
-test('shouldRejectEntityIdThatIsNotInCatalog', () => {
-    const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', 'x', 'formatar_disco') }, catalog);
-    assert.equal(result.reason, ResolutionFailure.UNKNOWN_ACTION);
-});
-
-test('shouldRejectActionFromAnotherSlotType', () => {
-    const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', 'reiniciar', 'reiniciar_pc') }, catalog);
-    assert.equal(result.reason, ResolutionFailure.UNKNOWN_ACTION);
+test('shouldSendUnknownAppNameToPcAsTextOnly', () => {
+    // O PC só COMPARA o texto com a lista privada; nada vira comando. Nem ids de outro tipo viram ação do catálogo.
+    for (const [spoken, entityId] of [['cmd /c del', undefined], ['x', 'formatar_disco'], ['reiniciar', 'reiniciar_pc']]) {
+        const result = resolveIntent({ name: 'AbrirAplicativoIntent', slots: slotWithMatch('aplicativo', spoken, entityId) }, catalog);
+        assert.equal(result.action.id, 'abrir_programa', spoken);
+        assert.deepEqual(result.params, { programa: spoken, verbo: 'abrir', exato: 0 });
+    }
 });
 
 test('shouldRejectUnknownIntent', () => {
@@ -74,4 +68,107 @@ test('shouldReportMissingShutdownMinutes', () => {
     const result = resolveIntent(shutdownIntent(undefined), catalog);
     assert.equal(result.reason, ResolutionFailure.MISSING_PARAM);
     assert.equal(result.missingSlot, 'minutos');
+});
+
+// ---- Tipos novos: duração, texto, programa da lista privada e inteiro com default ----
+const { parseIsoDurationSeconds, resolvePendingAction } = require('../domain/actionResolver');
+
+const PROGRAM_ID = 'p0123456789ab';
+
+function intentWith(name, slots) {
+    return { name, slots };
+}
+
+test('shouldConvertSpokenDurationToSeconds', () => {
+    assert.equal(parseIsoDurationSeconds('PT30S'), 30);
+    assert.equal(parseIsoDurationSeconds('PT1M30S'), 90);
+    assert.equal(parseIsoDurationSeconds('PT2H'), 7200);
+    for (const invalid of ['P1D', 'PT', 'PT1.5M', '30', 'PT1M30S; shutdown', '']) {
+        assert.equal(parseIsoDurationSeconds(invalid), undefined, invalid);
+    }
+});
+
+test('shouldResolveSeekWithDurationInSeconds', () => {
+    const result = resolveIntent(intentWith('AvancarIntent', { tempo: { name: 'tempo', value: 'PT2M' } }), catalog);
+    assert.equal(result.action.id, 'avancar_tempo');
+    assert.deepEqual(result.params, { segundos: 120 });
+});
+
+test('shouldAskForTimeWhenSeekHasNoDuration', () => {
+    const result = resolveIntent(intentWith('VoltarIntent', { tempo: { name: 'tempo' } }), catalog);
+    assert.equal(result.reason, ResolutionFailure.MISSING_PARAM);
+});
+
+test('shouldRejectDurationOutOfRange', () => {
+    const result = resolveIntent(intentWith('VoltarIntent', { tempo: { name: 'tempo', value: 'PT4H' } }), catalog);
+    assert.equal(result.reason, ResolutionFailure.INVALID_PARAM);
+});
+
+test('shouldUseDefaultVolumeStepWhenNoNumberIsSpoken', () => {
+    const result = resolveIntent(intentWith('AumentarVolumeIntent', { quantidade: { name: 'quantidade' } }), catalog);
+    assert.deepEqual([result.action.id, result.params], ['aumentar_volume', { quantidade: 20 }]);
+    const spoken = resolveIntent(intentWith('AbaixarVolumeIntent', { quantidade: { name: 'quantidade', value: '40' } }), catalog);
+    assert.deepEqual(spoken.params, { quantidade: 40 });
+});
+
+test('shouldKeepSearchTextAndRejectLongOrControlText', () => {
+    const ok = resolveIntent(intentWith('PesquisarIntent', { consulta: { name: 'consulta', value: '  receita de bolo  ' } }), catalog);
+    assert.deepEqual(ok.params, { consulta: 'receita de bolo' });
+    for (const value of ['x'.repeat(201), 'linha\nnova']) {
+        const result = resolveIntent(intentWith('PesquisarIntent', { consulta: { name: 'consulta', value } }), catalog);
+        assert.equal(result.reason, ResolutionFailure.INVALID_PARAM);
+    }
+});
+
+test('shouldSendProgramNameAndCanonicalVerbForOpenCloseAndUnlock', () => {
+    const verbSlot = (spoken, id) => slotWithMatch('verbo', spoken, id);
+    for (const [intentName, actionId, verbo] of [
+        ['AbrirAplicativoIntent', 'abrir_programa', 'executar'],
+        ['FecharAplicativoIntent', 'fechar_programa', 'encerrar'],
+        ['DestravarAplicativoIntent', 'destravar_programa', 'destravar'],
+    ]) {
+        const slots = { ...slotWithMatch('aplicativo', 'epic', undefined), ...verbSlot('x', verbo) };
+        const result = resolveIntent(intentWith(intentName, slots), catalog);
+        assert.deepEqual([result.action.id, result.params], [actionId, { programa: 'epic', verbo, exato: 0 }], intentName);
+    }
+});
+
+test('shouldUseDefaultVerbWhenSentenceHasNoVerbSlot', () => {
+    const result = resolveIntent(intentWith('FecharAplicativoIntent', slotWithMatch('aplicativo', 'edge', undefined)), catalog);
+    assert.equal(result.params.verbo, 'fechar');
+});
+
+test('shouldStillOpenCatalogAppThroughAppIntent', () => {
+    const result = resolveIntent(intentWith('AbrirAplicativoIntent', slotWithMatch('aplicativo', 'netflix', 'abrir_netflix')), catalog);
+    assert.equal(result.action.id, 'abrir_netflix');
+});
+
+test('shouldSendFreePhraseToPcWithAnyVerb', () => {
+    const result = resolveIntent(intentWith('ExecutarRotinaIntent', slotWithMatch('rotina', 'alterna para a tv', undefined)), catalog);
+    assert.deepEqual([result.action.id, result.params], ['abrir_programa', { programa: 'alterna para a tv', verbo: '*', exato: 0 }]);
+    const routine = resolveIntent(intentWith('ExecutarRotinaIntent', slotWithMatch('rotina', 'pausar', 'pausar_continuar')), catalog);
+    assert.equal(routine.action.id, 'pausar_continuar');
+});
+
+test('shouldAskWhichProgramWhenNameIsMissing', () => {
+    const result = resolveIntent(intentWith('FecharAplicativoIntent', { aplicativo: { name: 'aplicativo' } }), catalog);
+    assert.equal(result.reason, ResolutionFailure.MISSING_PARAM);
+});
+
+test('shouldRevalidatePendingTextAndProgramValues', () => {
+    // As ações de texto/programa não pedem confirmação: pendência forjada com elas é recusada.
+    const forged = resolvePendingAction({ actionId: 'pesquisar_google', params: { consulta: 'x' } }, catalog);
+    assert.equal(forged.reason, ResolutionFailure.UNKNOWN_ACTION);
+});
+
+test('shouldPickProgramActionBySpokenVerbInTheSameIntent', () => {
+    const slots = (verb) => ({ ...slotWithMatch('aplicativo', 'edge', undefined), ...slotWithMatch('verbo', verb, verb) });
+    for (const [verb, actionId] of [['executar', 'abrir_programa'], ['fechar', 'fechar_programa'], ['reabrir', 'destravar_programa']]) {
+        const result = resolveIntent(intentWith('AbrirAplicativoIntent', slots(verb)), catalog);
+        assert.deepEqual([result.action.id, result.params.verbo], [actionId, verb]);
+    }
+    const closeNetflix = resolveIntent(intentWith('AbrirAplicativoIntent', {
+        ...slotWithMatch('aplicativo', 'netflix', 'abrir_netflix'), ...slotWithMatch('verbo', 'fecha', 'fechar'),
+    }), catalog);
+    assert.deepEqual([closeNetflix.action.id, closeNetflix.params.programa], ['fechar_programa', 'netflix']);
 });

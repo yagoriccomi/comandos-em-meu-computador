@@ -1,5 +1,8 @@
 'use strict';
-/* Inicia o ícone (tray.ps1) e traduz os comandos fixos do menu em ações da sessão de desktop. */
+/*
+ * Inicia o ícone (tray.ps1) e traduz os comandos fixos do menu em ações da sessão de desktop.
+ * Cada linha do ícone é "<comando>" ou, só para "rename", "rename <nome digitado>" (validado depois).
+ */
 const childProcess = require('child_process');
 const path = require('path');
 const readline = require('readline');
@@ -13,7 +16,13 @@ const TrayCommand = Object.freeze({
     OPEN_LOG: 'openlog',
     SHUTDOWN: 'shutdown',
     QUIT: 'quit',
+    PROGRAMS_REFRESH: 'programs_refresh',
+    PROGRAMS_EDIT: 'programs_edit',
+    RENAME: 'rename',
+    ROUTINES: 'routines',
+    DEPLOY: 'deploy',
 });
+const MAX_ARGUMENT_LENGTH = 80;
 
 /**
  * @param {object} deps
@@ -22,8 +31,9 @@ const TrayCommand = Object.freeze({
  * @param {string} deps.logFile
  * @param {{ pause: Function, resume: Function, shutdownCore: Function }} deps.session
  * @param {() => void} deps.onExit     chamado quando o ícone é fechado
+ * @param {Object<string, (argument?: string) => void>} [deps.menuActions]  itens novos do menu (programas, nome, deploy)
  */
-function startTray({ trayScript, statusFile, logFile, session, onExit, logger, spawn = childProcess.spawn, execFile = childProcess.execFile }) {
+function startTray({ trayScript, statusFile, logFile, session, onExit, logger, menuActions = {}, spawn = childProcess.spawn, execFile = childProcess.execFile }) {
     const tray = spawn(POWERSHELL_EXE, [
         '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
         '-File', trayScript, '-StatusFile', statusFile, '-ParentPid', String(process.pid),
@@ -37,12 +47,15 @@ function startTray({ trayScript, statusFile, logFile, session, onExit, logger, s
             if (session.shutdownCore()) onExit();
         },
         [TrayCommand.QUIT]: () => onExit(),
+        ...menuActions,
     };
 
     readline.createInterface({ input: tray.stdout }).on('line', (line) => {
-        const handler = handlers[line.trim()];
+        const [command, ...rest] = line.trim().split(' ');
+        const argument = rest.join(' ').slice(0, MAX_ARGUMENT_LENGTH);
+        const handler = Object.prototype.hasOwnProperty.call(handlers, command) ? handlers[command] : undefined;
         if (handler) {
-            handler();
+            Promise.resolve().then(() => handler(argument)).catch((error) => logger.warn({ event: 'tray_command_failed', command, errorName: error.name }));
         } else {
             logger.warn({ event: 'unknown_tray_command' });
         }
@@ -52,4 +65,4 @@ function startTray({ trayScript, statusFile, logFile, session, onExit, logger, s
     return tray;
 }
 
-module.exports = { TrayCommand, startTray, POWERSHELL_EXE };
+module.exports = { TrayCommand, startTray, POWERSHELL_EXE, NOTEPAD_EXE };

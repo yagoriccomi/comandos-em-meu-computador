@@ -73,13 +73,15 @@ function createDesktopSession({ endpointFile, pipeSecret, localActions, executor
 
     async function runDesktopAction(message) {
         const localAction = localActions.get(message.actionId);
-        let ok = false;
+        let result = { ok: false };
         if (localAction && localAction.publicAction.requiresDesktop) {
-            ok = (await executor.execute(localAction, message.params)).ok;
+            result = await executor.execute(localAction, message.params);
         } else {
             logger.warn({ event: 'desktop_action_refused', actionId: message.actionId });
         }
-        if (channel) channel.send({ type: ChannelMessage.RESULT, id: message.id, ok });
+        if (channel) {
+            channel.send({ type: ChannelMessage.RESULT, id: message.id, ok: result.ok === true, status: result.status, choices: result.choices });
+        }
     }
 
     function onMessage(message) {

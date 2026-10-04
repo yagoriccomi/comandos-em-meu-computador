@@ -58,14 +58,18 @@ async function main() {
         format: 'cjs',
         outfile: path.join(APP_DIR, 'o-monstro.cjs'),
         external: ['bufferutil', 'utf-8-validate'],
+        // O agente instalado precisa saber onde está o repositório para "Publicar atualização".
+        define: { 'process.env.OMONSTRO_REPO_DIR': JSON.stringify(path.resolve(AGENT_DIR, '..')) },
         legalComments: 'none',
         logLevel: 'warning',
     });
 
     console.log('2/3 copiando o Node.js oficial e os arquivos de apoio…');
     fs.copyFileSync(process.execPath, path.join(APP_DIR, 'node.exe'));
-    const tray = fs.readFileSync(path.join(AGENT_DIR, 'src', 'desktop', 'tray.ps1'), 'utf8');
-    fs.writeFileSync(path.join(APP_DIR, 'tray.ps1'), tray.startsWith(UTF8_BOM) ? tray : `${UTF8_BOM}${tray}`);
+    for (const script of ['tray.ps1', 'input-helper.ps1', 'scan-programs.ps1']) {
+        const content = fs.readFileSync(path.join(AGENT_DIR, 'src', 'desktop', script), 'utf8');
+        fs.writeFileSync(path.join(APP_DIR, script), content.startsWith(UTF8_BOM) ? content : `${UTF8_BOM}${content}`);
+    }
     fs.copyFileSync(path.join(AGENT_DIR, 'config', 'actions.example.json'), path.join(APP_DIR, 'actions.example.json'));
 
     console.log('3/3 criando o atalho de instalação…');
