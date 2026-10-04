@@ -431,6 +431,13 @@
                     "type": "text",
                     "maxLength": 100,
                     "optional": true
+                },
+                {
+                    "name": "chat",
+                    "slot": "chat",
+                    "type": "text",
+                    "maxLength": 10,
+                    "optional": true
                 }
             ],
             "choiceParam": "projeto"

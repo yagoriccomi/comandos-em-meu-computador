@@ -216,4 +216,9 @@ function createClaudeFolders({ listFile, projectsDir, legacyDefault = () => unde
     };
 }
 
-module.exports = { FolderStatus, scanClaudeProjects, readCwd, createClaudeFolders };
+/** A ordem nomeia um projeto ("no projeto X …")? Sem isso, vale o chat vinculado (ou a pasta padrão). */
+function namesProject(order) {
+    return PROJECT_PREFIX.test(order);
+}
+
+module.exports = { FolderStatus, scanClaudeProjects, readCwd, namesProject, createClaudeFolders };

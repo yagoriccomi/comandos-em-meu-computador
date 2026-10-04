@@ -6,7 +6,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { createSessionLock, LockStatus, SESSION_DURATION_MS, MAX_FAILURES } = require('../src/claude/sessionLock');
-const { createClaudeCli, findClaudeExecutable, cleanEnvironment, splitSummary, QUESTION_ARGS, NEW_ORDER_ARGS, CONTINUE_ORDER_ARGS } = require('../src/claude/claudeCli');
+const { createClaudeCli, findClaudeExecutable, cleanEnvironment, splitSummary, QUESTION_ARGS, NEW_ORDER_ARGS, resumeOrderArgs } = require('../src/claude/claudeCli');
+const { createClaudeChats, BINDING_WINDOW_MS } = require('../src/claude/claudeChats');
 const { createClaudeJobs, JobState } = require('../src/claude/claudeJobs');
 const { createInternalRunner } = require('../src/internal/internalActions');
 
@@ -164,26 +165,49 @@ test('shouldExplainLoginWhenClaudeCodeIsLoggedOut', async () => {
     assert.match(spoken[0], /sem login/);
 });
 
-test('shouldContinueLastChatOrOpenNewChatWithOpus', async () => {
+test('shouldResumeBoundChatOrOpenNewChatWithOpusAndReportSessionId', async () => {
     const folder = tempDir();
-    const { jobs, calls } = jobsWith([{ result: 'ok', is_error: false }, { result: 'ok', is_error: false }]);
-    jobs.order('rode os testes', folder);
+    const sessions = [];
+    const { jobs, calls } = jobsWith([{ result: 'ok', is_error: false, session_id: '11111111-2222-3333-4444-555555555555' }, { result: 'ok', is_error: false, session_id: '66666666-7777-8888-9999-000000000000' }]);
+    jobs.order('rode os testes', folder, { sessionId: '11111111-2222-3333-4444-555555555555', onSession: (id) => sessions.push(id) });
     await settle();
-    jobs.order('novo chat, crie um README', folder);
+    jobs.order('novo chat, crie um README', folder, { onSession: (id) => sessions.push(id) });
     await settle();
-    assert.deepEqual(calls[0].args.slice(0, CONTINUE_ORDER_ARGS.length), [...CONTINUE_ORDER_ARGS]);
+    assert.deepEqual(calls[0].args.slice(0, 7), resumeOrderArgs('11111111-2222-3333-4444-555555555555'));
     assert.deepEqual(calls[1].args.slice(0, NEW_ORDER_ARGS.length), [...NEW_ORDER_ARGS]);
     assert.equal(calls[1].input, 'crie um README');
     assert.equal(calls[0].options.cwd, folder);
+    assert.deepEqual(sessions, ['11111111-2222-3333-4444-555555555555', '66666666-7777-8888-9999-000000000000']);
+    assert.throws(() => resumeOrderArgs('--dangerously-skip-permissions'), (error) => error.code === 'invalid_session_id');
 });
 
-test('shouldOpenNewChatWhenFolderHasNoConversationYet', async () => {
+test('shouldOpenNewChatWhenBoundChatNoLongerExists', async () => {
     const folder = tempDir();
-    const { jobs, calls } = jobsWith([{ result: 'No conversation found to continue', is_error: true }, { result: 'feito\nRESUMO: feito', is_error: false }]);
-    jobs.order('rode os testes', folder);
+    const sessions = [];
+    const { jobs, calls } = jobsWith([{ result: 'No conversation found with session ID', is_error: true }, { result: 'feito\nRESUMO: feito', is_error: false, session_id: '66666666-7777-8888-9999-000000000000' }]);
+    jobs.order('rode os testes', folder, { sessionId: '11111111-2222-3333-4444-555555555555', onSession: (id) => sessions.push(id) });
     await settle();
     assert.equal(calls.length, 2);
     assert.ok(calls[1].args.includes('opus'));
+    assert.deepEqual(sessions, ['66666666-7777-8888-9999-000000000000']);
+});
+
+test('shouldKeepChatBoundForThreeHoursAndReleaseOnDemand', () => {
+    let now = 10_000_000;
+    const chats = createClaudeChats({ filePath: path.join(tempDir(), 'chats.json'), clock: () => now });
+    assert.equal(chats.activeCurrent(), undefined);
+    chats.remember('C:\\Projeto', '11111111-2222-3333-4444-555555555555');
+    assert.equal(chats.activeCurrent().sessionId, '11111111-2222-3333-4444-555555555555');
+    now += BINDING_WINDOW_MS - 1;
+    assert.ok(chats.activeCurrent(), 'ainda dentro das 3 h');
+    now += 2;
+    assert.equal(chats.activeCurrent(), undefined, 'passaram 3 h');
+    assert.equal(chats.previousFor('c:\\projeto').sessionId, '11111111-2222-3333-4444-555555555555', 'o chat anterior continua lembrado');
+    chats.remember('C:\\Projeto', '11111111-2222-3333-4444-555555555555');
+    chats.release();
+    assert.equal(chats.activeCurrent(), undefined);
+    chats.remember('C:\\Projeto', 'nao-e-um-id');
+    assert.equal(chats.activeCurrent(), undefined, 'id inválido é ignorado');
 });
 
 test('shouldRefuseOrderWithoutProjectFolder', () => {
@@ -193,7 +217,11 @@ test('shouldRefuseOrderWithoutProjectFolder', () => {
 });
 
 // ---------- ações internas ----------
-function runnerWith({ lockStatus = LockStatus.OK, answer = { state: JobState.NONE }, folder = { status: 'ok', folder: 'C:\\P', order: 'rode os testes' } } = {}) {
+function runnerWith({
+    lockStatus = LockStatus.OK, answer = { state: JobState.NONE }, folder = { status: 'ok', folder: 'C:\\P', order: 'rode os testes' },
+    active, previous,
+} = {}) {
+    const remembered = [];
     const asked = [];
     const ordered = [];
     const notices = [];
@@ -202,13 +230,25 @@ function runnerWith({ lockStatus = LockStatus.OK, answer = { state: JobState.NON
         inputHelper: { run: async () => 'ok' },
         loadPrograms: () => ({ programs: [] }),
         launcher: { openApp: async () => true, openUrl: async () => true },
-        claudeJobs: { ask: (text) => asked.push(text), order: (text, where) => ordered.push([text, where]), lastAnswer: () => answer },
-        claudeFolders: { resolve: () => folder },
+        claudeJobs: {
+            ask: (text) => asked.push(text),
+            order: (text, where, chat = {}) => ordered.push([text, where, chat.sessionId]),
+            lastAnswer: () => answer,
+            isNewChatRequest: (text) => /^novo chat/.test(text),
+        },
+        claudeFolders: { resolve: (ordem) => (folder.status === 'ok' ? { ...folder, order: ordem } : folder) },
+        claudeChats: {
+            activeCurrent: () => active,
+            previousFor: () => previous,
+            isActive: (binding) => binding === active,
+            remember: (where, id) => remembered.push([where, id]),
+            release: () => remembered.push('release'),
+        },
         sessionLock: { check: () => lockStatus, revoke: () => { revoked = true; } },
         notify: (text) => notices.push(text),
         logger: QUIET_LOGGER,
     });
-    return { runner, asked, ordered, notices, wasRevoked: () => revoked };
+    return { runner, asked, ordered, notices, remembered, wasRevoked: () => revoked };
 }
 
 test('shouldStartQuestionAndReadSummaryStates', async () => {
@@ -228,7 +268,7 @@ test('shouldGateOrdersBySessionLock', async () => {
     assert.match(noPin.notices[0], /Defina o PIN/);
     const open = runnerWith();
     assert.deepEqual(await open.runner.run('claude_code_ordem', { ordem: 'rode os testes' }), { ok: true });
-    assert.deepEqual(open.ordered, [['rode os testes', 'C:\\P']]);
+    assert.deepEqual(open.ordered, [['rode os testes', 'C:\\P', undefined]], 'sem chat anterior: chat novo');
     const ambiguous = runnerWith({ folder: { status: 'ambiguous', choices: ['Gerador-de-Imagens', 'Calculo-de-Recisao'] } });
     assert.deepEqual(await ambiguous.runner.run('claude_code_ordem', { ordem: 'no projeto x faça y' }),
         { ok: false, status: 'ambiguous', choices: ['Gerador-de-Imagens', 'Calculo-de-Recisao'] });
@@ -240,4 +280,31 @@ test('shouldGateOrdersBySessionLock', async () => {
     const end = runnerWith();
     assert.deepEqual(await end.runner.run('claude_code_encerrar', {}), { ok: true });
     assert.equal(end.wasRevoked(), true);
+});
+
+test('shouldSendEveryOrderToTheBoundChatForThreeHours', async () => {
+    const bound = { folder: 'C:\\Bound', sessionId: '11111111-2222-3333-4444-555555555555' };
+    const { runner, ordered } = runnerWith({ active: bound, previous: bound });
+    assert.deepEqual(await runner.run('claude_code_ordem', { ordem: 'agora rode os testes' }), { ok: true });
+    assert.deepEqual(ordered, [['agora rode os testes', 'C:\\Bound', '11111111-2222-3333-4444-555555555555']], 'vai para o chat vinculado, mesmo sem dizer o projeto');
+});
+
+test('shouldAskContinueOrNewAfterThreeHoursAndHonorTheAnswer', async () => {
+    const old = { folder: 'C:\\P', sessionId: '11111111-2222-3333-4444-555555555555' };
+    assert.deepEqual(await runnerWith({ previous: old }).runner.run('claude_code_ordem', { ordem: 'rode os testes' }), { ok: false, status: 'chat_choice' });
+    const keep = runnerWith({ previous: old });
+    await keep.runner.run('claude_code_ordem', { ordem: 'rode os testes', chat: 'continuar' });
+    assert.equal(keep.ordered[0][2], '11111111-2222-3333-4444-555555555555');
+    const fresh = runnerWith({ previous: old });
+    await fresh.runner.run('claude_code_ordem', { ordem: 'rode os testes', chat: 'novo' });
+    assert.equal(fresh.ordered[0][2], undefined);
+    const forced = runnerWith({ previous: old });
+    await forced.runner.run('claude_code_ordem', { ordem: 'novo chat, rode os testes' });
+    assert.equal(forced.ordered[0][2], undefined, '"novo chat" não pergunta');
+});
+
+test('shouldReleaseBindingWhenSessionEnds', async () => {
+    const end = runnerWith();
+    await end.runner.run('claude_code_encerrar', {});
+    assert.deepEqual(end.remembered, ['release']);
 });

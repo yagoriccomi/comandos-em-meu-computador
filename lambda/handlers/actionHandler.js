@@ -17,6 +17,10 @@ const { sendCommand, DeliveryResult } = require('../messaging/commandBus');
 const PENDING_ATTRIBUTE = 'pendingAction';
 const PENDING_CHOICE_ATTRIBUTE = 'pendingChoice';
 const PENDING_PIN_ATTRIBUTE = 'pendingPin';
+const PENDING_CHAT_ATTRIBUTE = 'pendingChat';
+const ChatChoice = Object.freeze({ CONTINUE: 'continuar', NEW: 'novo' });
+const CONTINUE_WORDS = /\b(continu\w*|anterior|mesmo|antigo|velho)\b/;
+const NEW_WORDS = /\b(nov[oa]|comec\w*|zero|outro|outra)\b/;
 const MAX_PIN_REPROMPTS = 2;
 const CLAUDE_ANSWER_ACTION_ID = 'resposta_claude';
 const PENDING_CONFIRMATION_TTL_MS = 60 * 1000;
@@ -175,6 +179,11 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
             }
             if (result === DeliveryResult.PIN_REQUIRED) return askPin(handlerInput, action, params, params.pin !== undefined);
             if (result === DeliveryResult.LOCKED) return speak(handlerInput, speech.CLAUDE_CODE_LOCKED);
+            if (result === DeliveryResult.CHAT_CHOICE) {
+                const { pin, ...withoutPin } = params;
+                storePending(handlerInput, PENDING_CHAT_ATTRIBUTE, { actionId: action.id, params: withoutPin, reprompts: 0, expiresAt: clock() + PENDING_CONFIRMATION_TTL_MS });
+                return ask(handlerInput, speech.ASK_CHAT_CHOICE);
+            }
             if (result === DeliveryResult.AMBIGUOUS || result === DeliveryResult.NOT_FOUND) {
                 return askWhichOne(handlerInput, action, params, result, choices);
             }
@@ -305,7 +314,41 @@ function createActionHandlers({ catalog, loadSecrets, connectTransport, logger, 
         },
     };
 
-    return [pinHandler, choiceHandler, actionHandler, confirmYesHandler, confirmNoHandler];
+    /** "Continuar o chat anterior ou começar um novo?": sim/continuar → anterior; não/novo → novo. */
+    const chatChoiceHandler = {
+        canHandle(handlerInput) {
+            const { requestEnvelope } = handlerInput;
+            if (Alexa.getRequestType(requestEnvelope) !== 'IntentRequest' || !hasPending(handlerInput, PENDING_CHAT_ATTRIBUTE)) return false;
+            const intentName = Alexa.getIntentName(requestEnvelope);
+            return intentName === NO_INTENT || !NOT_A_CHOICE_INTENTS.includes(intentName);
+        },
+        async handle(handlerInput) {
+            const secrets = await authorize(handlerInput);
+            if (!secrets) return speak(handlerInput, speech.FAILED);
+            const pending = takePending(handlerInput, PENDING_CHAT_ATTRIBUTE, clock);
+            const action = pending && catalog.findById(pending.actionId);
+            if (!action) return speak(handlerInput, speech.CONFIRMATION_EXPIRED);
+            const intentName = Alexa.getIntentName(handlerInput.requestEnvelope);
+            const spoken = String(spokenSlotValue(handlerInput.requestEnvelope) || '').normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase();
+            let chat;
+            if (intentName === YES_INTENT || CONTINUE_WORDS.test(spoken)) chat = ChatChoice.CONTINUE;
+            else if (intentName === NO_INTENT || NEW_WORDS.test(spoken)) chat = ChatChoice.NEW;
+            if (!chat) {
+                const reprompts = Number(pending.reprompts) || 0;
+                if (reprompts >= MAX_PIN_REPROMPTS) return speak(handlerInput, speech.CANCELLED_BY_USER);
+                storePending(handlerInput, PENDING_CHAT_ATTRIBUTE, { ...pending, reprompts: reprompts + 1 });
+                return ask(handlerInput, speech.CHAT_CHOICE_NOT_UNDERSTOOD);
+            }
+            const resolution = revalidateParams(action, { ...pending.params, chat });
+            if (!resolution.ok) {
+                logger.info({ event: 'request_rejected', reason: resolution.reason });
+                return speak(handlerInput, speech.UNKNOWN_ACTION);
+            }
+            return execute(handlerInput, secrets, resolution.action, resolution.params);
+        },
+    };
+
+    return [chatChoiceHandler, pinHandler, choiceHandler, actionHandler, confirmYesHandler, confirmNoHandler];
 }
 
 module.exports = { createActionHandlers, hashUserId, PENDING_ATTRIBUTE, PENDING_CHOICE_ATTRIBUTE, PENDING_PIN_ATTRIBUTE, PENDING_CONFIRMATION_TTL_MS };

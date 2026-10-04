@@ -51,9 +51,15 @@ function mirrorDirectory(source, target) {
  * Verbos da lista privada: cada grupo (abrir/fechar/destravar) passa a ter exatamente os verbos do arquivo.
  * Formas faladas conhecidas ("abre", "abra") vêm do catálogo; verbos novos entram só com a forma escrita.
  */
+/** Primeiras palavras das rotinas do catálogo ("reiniciar o computador"): não podem virar verbo de programa. */
+function reservedVerbs(catalogSource) {
+    return new Set(catalogSource.actions.flatMap((action) => action.synonyms || []).map((synonym) => synonym.split(' ')[0]));
+}
+
 function applyPrivateVerbs(catalogSource, privateVerbs) {
     if (!privateVerbs || typeof privateVerbs !== 'object') return catalogSource;
-    const used = new Set();
+    const used = reservedVerbs(catalogSource);
+    for (const defaults of Object.values(catalogSource.verbs)) for (const verb of Object.keys(defaults)) used.delete(verb);
     const verbs = {};
     for (const [group, defaults] of Object.entries(catalogSource.verbs)) {
         const wanted = Array.isArray(privateVerbs[group]) ? privateVerbs[group] : Object.keys(defaults);
