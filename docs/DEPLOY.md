@@ -29,7 +29,7 @@ scripts/deploy.ps1
  └─ 3. agente: npm run build:pacote → abre "Instalar O Monstro.cmd" (pede administrador)
 ```
 
-O mesmo script roda pelo menu da bandeja: **"Publicar atualização…"**.
+Pelo menu da bandeja: **"Atualizar O Monstro…"** (`-SoAgente`: gera o pacote e abre o instalador, que mantém a configuração) e **"Publicar skill na Alexa…"** (`-SoSkill`).
 
 ## 2. Pré-requisitos (uma vez só, feitos pelo dono)
 

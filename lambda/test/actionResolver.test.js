@@ -94,9 +94,10 @@ test('shouldResolveSeekWithDurationInSeconds', () => {
     assert.deepEqual(result.params, { segundos: 120 });
 });
 
-test('shouldAskForTimeWhenSeekHasNoDuration', () => {
+test('shouldSeekTenSecondsWhenSeekHasNoDuration', () => {
     const result = resolveIntent(intentWith('VoltarIntent', { tempo: { name: 'tempo' } }), catalog);
-    assert.equal(result.reason, ResolutionFailure.MISSING_PARAM);
+    assert.equal(result.ok, true);
+    assert.equal(result.params.segundos, 10);
 });
 
 test('shouldRejectDurationOutOfRange', () => {
@@ -194,4 +195,16 @@ test('shouldNotTreatOtherPhrasesAsClaude', () => {
         assert.equal(detectClaudePhrase(phrase), undefined, phrase);
     }
     assert.equal(resolveIntent(intentWith('AbrirAplicativoIntent', slotWithMatch('aplicativo', 'claude', undefined)), catalog).action.id, 'abrir_programa');
+});
+
+test('shouldCloseWhenFreePhraseStartsWithCloseVerb', () => {
+    const result = resolveIntent(intentWith('ExecutarRotinaIntent', slotWithMatch('rotina', 'fecha o palworld', undefined)), catalog);
+    assert.deepEqual([result.action.id, result.params], ['fechar_programa', { programa: 'o palworld', verbo: 'fechar', exato: 0 }]);
+});
+
+test('shouldTreatStrayChoiceAsFreePhrase', () => {
+    const result = resolveIntent({ name: 'EscolhaIntent', slots: slotWithMatch('escolha', 'deadlock') }, catalog);
+    assert.equal(result.ok, true);
+    assert.equal(result.action.id, 'abrir_programa');
+    assert.equal(result.params.programa, 'deadlock');
 });

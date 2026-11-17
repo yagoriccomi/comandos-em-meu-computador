@@ -22,9 +22,36 @@ Detalhes de arquitetura e regras do projeto: [CLAUDE.md](CLAUDE.md) · auditoria
 | cancelar o desligamento | `cancelar_desligamento` | não |
 | reiniciar o computador | `reiniciar_pc` | **sim** |
 | rodar o backup | `backup_documentos` (desativado até você configurar) | **sim** |
+| pausar / mudo / tela cheia / sair da tela cheia / pular anúncio | mídia | não |
+| aumentar o volume em 10 · abaixar o volume | `aumentar_volume` / `abaixar_volume` | não |
+| avançar 30 segundos · voltar 2 minutos (padrão: 10 s) | `avancar_tempo` / `voltar_tempo` | não |
+| pesquisar receita de bolo | `pesquisar_google` (abre o Google) | não |
+| abrir o Steam · fechar o Deadlock · destravar o Chrome | programas da sua lista | não |
+| perguntar ao Claude qual a capital da Austrália | `perguntar_claude` (resposta falada pelo PC) | não |
+| a resposta do Claude | `resposta_claude` (resumo na Alexa) | não |
+| mandar o Claude, no projeto X, corrigir os testes | `claude_code_ordem` (pede o PIN) | **PIN** |
+| novo chat, … | ordem em chat novo do Claude Code | **PIN** |
+| encerrar sessão do Claude Code | `claude_code_encerrar` | não |
 
 Abrir a Netflix e bloquear a tela precisam de alguém logado no Windows. Desligar, reiniciar e backup funcionam
 já na tela de login.
+
+### Programas e jogos
+
+A lista privada (`%LOCALAPPDATA%\OMonstro\programas.json`) é atualizada sozinha toda vez que o app liga
+(programas do menu Iniciar e jogos da Steam), mantendo suas edições. Se o nome falado bater com mais de um, a
+Alexa pergunta "qual deles?": responda "o segundo", o nome ou "sim".
+
+### Claude Code
+
+Ordens exigem PIN de 6 dígitos (bandeja → Claude Code → Definir PIN…). Um PIN certo abre sessão de 3 h;
+5 erros bloqueiam por 15 min. Ordens seguidas continuam no mesmo chat enquanto houver uso nas últimas 3 h.
+
+### Atualizar
+
+- **Atualizar O Monstro…** (bandeja): gera o pacote do repositório e abre o instalador. Responda **Sim** para
+  manter a configuração.
+- **Publicar skill na Alexa…** (bandeja): envia nome de chamada e frases para a Amazon.
 
 ## Pré-requisitos
 
@@ -75,7 +102,8 @@ endereço do cluster, as duas credenciais (e testa a conexão) e o Skill ID, e e
 > com exclusões.
 
 **Ícone na bandeja:** 🟢 pronto · 🟡 pausado · ⚪ sem conexão · 🔴 núcleo parado. Menu: Pausar/Retomar ações,
-Abrir log, Desligar o agente, Fechar ícone.
+Abrir log, Programas (atualizar/editar lista, gerar rotinas do app Alexa), Claude Code (pastas, PIN, encerrar
+sessão), Trocar nome de chamada, Atualizar O Monstro, Publicar skill na Alexa, Desligar o agente, Fechar ícone.
 
 **Desinstalar:** dois cliques em `C:\Program Files\OMonstro\Desinstalar O Monstro.cmd`.
 
@@ -92,8 +120,8 @@ Os segredos são lidos quando a Lambda inicia. Depois de trocar o `secrets.json`
 
 ## Trocar o nome de chamada
 
-Edite `invocationName` em [interactionModels/custom/pt-BR.json](interactionModels/custom/pt-BR.json) (ou no
-console: **Build → Invocation**) e recompile o modelo. Não é possível trocar por voz.
+Bandeja → **Trocar nome de chamada…** (ex.: "a morgana") e depois **Publicar skill na Alexa…**. Não é
+possível trocar por voz.
 
 ## Adicionar ou mudar uma ação
 

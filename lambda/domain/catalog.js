@@ -29,7 +29,7 @@ function assertRange(actionId, param) {
 
 function isValidDefault(param) {
     if (param.type === ParamType.VERB) return typeof param.default === 'string' && VERB_PATTERN.test(param.default);
-    return param.type === ParamType.INTEGER && Number.isSafeInteger(param.default) && param.default >= param.min && param.default <= param.max;
+    return (param.type === ParamType.INTEGER || param.type === ParamType.DURATION) && Number.isSafeInteger(param.default) && param.default >= param.min && param.default <= param.max;
 }
 
 function validateParam(actionId, param) {

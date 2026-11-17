@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$StatusFile,
     [Parameter(Mandatory = $true)][int]$ParentPid
 )
@@ -122,7 +122,8 @@ $claudePinItem = $claudeMenu.DropDownItems.Add('Definir PIN…')
 $claudeLockItem = $claudeMenu.DropDownItems.Add('Encerrar sessão (pede o PIN de novo)')
 [void]$menu.Items.Add($claudeMenu)
 $renameItem = $menu.Items.Add('Trocar nome de chamada…')
-$deployItem = $menu.Items.Add('Publicar atualização…')
+$updateItem = $menu.Items.Add('Atualizar O Monstro…')
+$deployItem = $menu.Items.Add('Publicar skill na Alexa…')
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 $shutdownItem = $menu.Items.Add('Desligar o agente…')
 $quitItem = $menu.Items.Add('Fechar ícone')
@@ -136,7 +137,7 @@ $editItem.add_Click({ Send-Command 'programs_edit' })
 $routinesItem.add_Click({ Send-Command 'routines' })
 $renameItem.add_Click({
     $name = [Microsoft.VisualBasic.Interaction]::InputBox(
-        "Como a Alexa deve chamar este PC? Com artigo, só letras.`nExemplos: o monstro, a morgana.`n`nO novo nome vale depois de 'Publicar atualização'.",
+        "Como a Alexa deve chamar este PC? Com artigo, só letras.`nExemplos: o monstro, a morgana.`n`nO novo nome vale depois de 'Publicar skill na Alexa'.",
         $AppName, '')
     $clean = ($name -replace '[\r\n]', ' ').Trim()
     if ($clean) { Send-Command "rename $clean" }
@@ -159,9 +160,15 @@ $claudePinItem.add_Click({
 })
 $deployItem.add_Click({
     $answer = [System.Windows.Forms.MessageBox]::Show(
-        'Publicar a skill na Amazon e gerar o instalador do agente? Uma janela vai mostrar o andamento.',
+        'Publicar a skill na Amazon (nome de chamada e verbos)? Uma janela vai mostrar o andamento.',
         $AppName, [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
     if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { Send-Command 'deploy' }
+})
+$updateItem.add_Click({
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+        'Atualizar O Monstro com a versão do repositório? O instalador vai abrir (pede administrador); responda Sim para manter a configuração.',
+        $AppName, [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { Send-Command 'update' }
 })
 $shutdownItem.add_Click({
     $answer = [System.Windows.Forms.MessageBox]::Show(
