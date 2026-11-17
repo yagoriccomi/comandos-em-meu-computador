@@ -36,7 +36,9 @@ function createLauncher({ spawn = childProcess.spawn, logger }) {
     return {
         openApp(appId) {
             if (typeof appId !== 'string' || !SAFE_APP_ID.test(appId)) return Promise.resolve(false);
-            return startExplorer(`${APPS_FOLDER_PREFIX}${appId}`);
+            // Atalhos de jogos (steam://, googleplaygames://) e caminhos absolutos (C:\...\jogo.exe) abrem direto.
+            const direct = /^[a-z][a-z0-9+.-]*:\/\//i.test(appId) || /^[a-z]:\\/i.test(appId);
+            return startExplorer(direct ? appId : `${APPS_FOLDER_PREFIX}${appId}`);
         },
         openUrl(url) {
             if (typeof url !== 'string' || !HTTPS_URL.test(url)) return Promise.resolve(false);

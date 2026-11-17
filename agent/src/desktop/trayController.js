@@ -21,6 +21,7 @@ const TrayCommand = Object.freeze({
     RENAME: 'rename',
     ROUTINES: 'routines',
     DEPLOY: 'deploy',
+    UPDATE: 'update',
     CLAUDE_SET_PIN: 'claude_pin',
     CLAUDE_FOLDER: 'claude_folder',
     CLAUDE_FOLDERS_IMPORT: 'claude_import',

@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { isValidProcessTarget } = require('../desktop/inputHelper');
 const { normalizeText } = require('./textNormalization');
+const { steamGameProcesses } = require('./steamProcesses');
 
 const FILE_VERSION = 1;
 const MAX_NAME_LENGTH = 120;
@@ -56,7 +57,7 @@ const README = Object.freeze([
     'apelidos: outros nomes que você fala (quantos quiser). Ex.: ["vs code", "editor"].',
     'verbosDesligados: verbos que NÃO valem para este programa. Ex.: ["ligar"]. Os verbos ficam em "verbos".',
     'processos: pasta + exe que "fechar" e "destravar" encerram. Programas com vários executáveis listam todos.',
-    'Verbo novo em "verbos" só passa a ser entendido depois de "Publicar atualização" (deploy).',
+    'Verbo novo em "verbos" só passa a ser entendido depois de "Publicar skill na Alexa" (deploy).',
     'Depois de editar, salve. Não precisa reiniciar nada.',
 ]);
 
@@ -158,7 +159,8 @@ function fromDetected(detected) {
         aliases: [...(SUGGESTED_ALIASES[key] || [])],
         disabledVerbs: [],
         appId: detected.appId,
-        processes: uniqueProcesses([...scannedProcesses, ...(KNOWN_EXTRA_PROCESSES[key] || [])]),
+        processes: uniqueProcesses([...scannedProcesses, ...steamGameProcesses(detected.appId), ...(KNOWN_EXTRA_PROCESSES[key] || [])])
+            .filter(isValidProcessTarget),
         manual: false,
     };
 }

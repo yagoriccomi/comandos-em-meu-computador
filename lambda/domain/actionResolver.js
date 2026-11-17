@@ -33,6 +33,8 @@ const ResolutionFailure = Object.freeze({
 const SLOT_INTENTS = Object.freeze({
     AbrirAplicativoIntent: { slotName: 'aplicativo', slotType: 'TIPO_APLICATIVO' },
     ExecutarRotinaIntent: { slotName: 'rotina', slotType: 'TIPO_ROTINA' },
+    // Sem "qual deles?" pendente, a Alexa às vezes joga "abrir o deadlock" aqui: vira frase livre.
+    EscolhaIntent: { slotName: 'escolha', slotType: 'TIPO_ESCOLHA' },
 });
 
 function findMatchedEntityId(slot) {
@@ -109,6 +111,14 @@ function resolveFreePhrase(slot, catalog) {
     if (!programParam || !slot || isEmpty(slot.value)) return { ok: false, reason: ResolutionFailure.UNKNOWN_ACTION };
     const parsed = parseText(programParam, slot.value);
     if (!parsed.ok) return { ok: false, reason: ResolutionFailure.UNKNOWN_ACTION };
+    // "fechar o palworld" que caiu como frase livre: o verbo do início decide a ação (senão o PC abriria).
+    const [first, ...rest] = parsed.value.split(/\s+/);
+    const spokenVerb = first.toLowerCase();
+    for (const [group, verbs] of Object.entries(catalog.verbs)) {
+        const verb = Object.keys(verbs).find((name) => name === spokenVerb || verbs[name].includes(spokenVerb));
+        const verbAction = verb && rest.length && catalog.findById(PROGRAM_ACTION_BY_VERB_GROUP[group]);
+        if (verbAction) return { ok: true, action: verbAction, params: { programa: rest.join(' '), verbo: verb, exato: 0 } };
+    }
     return { ok: true, action, params: { programa: parsed.value, verbo: ANY_VERB, exato: 0 } };
 }
 
@@ -144,7 +154,7 @@ function resolveIntent(intent, catalog) {
         if (misrouted) return misrouted;
         const slot = intent.slots && intent.slots[slotIntent.slotName];
         const catalogAction = catalog.findById(findMatchedEntityId(slot));
-        if (intent.name === 'ExecutarRotinaIntent') {
+        if (intent.name === 'ExecutarRotinaIntent' || intent.name === 'EscolhaIntent') {
             if (catalogAction && catalogAction.slotType === slotIntent.slotType) return resolveParams(catalogAction, intent);
             return resolveFreePhrase(slot, catalog);
         }

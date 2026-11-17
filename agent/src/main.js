@@ -113,13 +113,13 @@ function openInNotepad(filePath) {
     childProcess.execFile(NOTEPAD_EXE, [filePath], { shell: false }, () => {});
 }
 
-/** "Publicar atualização": janela visível rodando o script de deploy do repositório. */
-function startDeploy(statusWriter, state) {
+/** Janela visível rodando o deploy do repositório: '-SoAgente' (atualizar o app) ou '-SoSkill' (publicar a skill). */
+function startDeploy(statusWriter, state, mode) {
     if (!fs.existsSync(paths.DEPLOY_SCRIPT)) {
         statusWriter.notify('Não achei o script de deploy. Gere o pacote de novo a partir do repositório.', state());
         return;
     }
-    const child = childProcess.spawn(POWERSHELL_EXE, ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', paths.DEPLOY_SCRIPT], {
+    const child = childProcess.spawn(POWERSHELL_EXE, ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', paths.DEPLOY_SCRIPT, mode], {
         shell: false, detached: true, stdio: 'ignore', windowsHide: false, cwd: paths.REPO_DIR,
     });
     child.unref();
@@ -180,12 +180,13 @@ function createMenuActions({ programs, statusWriter, session, logger, sessionLoc
         [TrayCommand.ROUTINES]: () => openInNotepad(programs.writeRoutineSuggestions()),
         [TrayCommand.RENAME]: (name) => {
             try {
-                notify(`Nome gravado: "${programs.setInvocationName(name)}". Use "Publicar atualização" para aplicar na Alexa.`);
+                notify(`Nome gravado: "${programs.setInvocationName(name)}". Use "Publicar skill na Alexa" para aplicar na Alexa.`);
             } catch (error) {
                 notify(error.message);
             }
         },
-        [TrayCommand.DEPLOY]: () => startDeploy(statusWriter, session.getState),
+        [TrayCommand.DEPLOY]: () => startDeploy(statusWriter, session.getState, '-SoSkill'),
+        [TrayCommand.UPDATE]: () => startDeploy(statusWriter, session.getState, '-SoAgente'),
     };
 }
 
@@ -243,9 +244,8 @@ function runDesktop() {
             logger.warn({ event: 'claude_folders_first_import_failed', errorName: error.name });
         }
     }
-    if (!fs.existsSync(paths.PROGRAMS_FILE)) {
-        programs.refresh().catch((error) => logger.warn({ event: 'programs_first_scan_failed', errorName: error.name }));
-    }
+    // Toda vez que o app liga: acha programas e jogos novos (mantém as edições do dono).
+    programs.refresh().catch((error) => logger.warn({ event: 'programs_startup_scan_failed', errorName: error.name }));
     startTray({
         trayScript: isPackagedInstall() ? paths.TRAY_SCRIPT : DEV_ASSET_PATHS['tray.ps1'],
         statusFile: paths.STATUS_FILE,
